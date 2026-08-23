@@ -685,17 +685,40 @@ def cmd_gateways():
 
 def cmd_model(args):
     global ACTIVE_GW
-    if not args:
-        cmd_gateways()
-        console.print(f"\n[{C['dim']}]Ganti model: /model <id>  (contoh: /model tr-glm, /model blockrun)[/]")
+    ids = list(GATEWAYS.keys())
+    if args:
+        gw_id = args[0].lower()
+        # Numeric selection: /model 2
+        if gw_id.isdigit() and 1 <= int(gw_id) <= len(ids):
+            gw_id = ids[int(gw_id) - 1]
+        if gw_id in GATEWAYS:
+            ACTIVE_GW = gw_id; SESSION.gateway = gw_id
+            console.print(f"[{C['success']}]✓ Model → {GATEWAYS[gw_id]['name']} ({GATEWAYS[gw_id]['model']})[/]")
+        else:
+            console.print(f"[{C['error']}]Unknown: {gw_id}[/]")
+            console.print(f"[{C['dim']}]Tersedia: {', '.join(ids)}[/]")
         return
-    gw_id = args[0].lower()
-    if gw_id in GATEWAYS:
-        ACTIVE_GW = gw_id; SESSION.gateway = gw_id
-        console.print(f"[{C['success']}]✓ Model → {GATEWAYS[gw_id]['name']} ({GATEWAYS[gw_id]['model']})[/]")
-    else:
-        console.print(f"[{C['error']}]Unknown: {gw_id}[/]")
-        console.print(f"[{C['dim']}]Tersedia: {', '.join(GATEWAYS.keys())}[/]")
+    # No args → interactive arrow-key selection
+    try:
+        from prompt_toolkit.shortcuts import radiolist_dialog
+        values = [
+            (gw_id, f" {gw['name']:<28} [{gw['model']}]")
+            for gw_id, gw in GATEWAYS.items()
+        ]
+        result = radiolist_dialog(
+            title="Pilih Model",
+            text="Gunakan ↑/↓ lalu Enter untuk pilih (Esc = batal):",
+            values=values,
+        ).run()
+        if result:
+            ACTIVE_GW = result; SESSION.gateway = result
+            console.print(f"[{C['success']}]✓ Model → {GATEWAYS[result]['name']} ({GATEWAYS[result]['model']})[/]")
+        else:
+            console.print(f"[{C['dim']}]Batal.[/]")
+    except Exception:
+        # Fallback: numbered list
+        cmd_gateways()
+        console.print(f"\n[{C['dim']}]Ganti model: /model <id> atau /model <no>  (contoh: /model 2, /model tr-glm)[/]")
 
 def cmd_permission(args):
     if not args:
