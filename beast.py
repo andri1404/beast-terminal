@@ -927,6 +927,7 @@ def load_project_context():
     return context
 
 PROJECT_CONTEXT = load_project_context()
+LOADED_JAILBREAK = ""
 
 def _os_context():
     """Detect OS and return tool availability guidance."""
@@ -946,8 +947,10 @@ def _os_context():
                 "You are on a Unix-like system. Standard tools (curl, dig, host, whatweb, sqlite3, grep, etc.) are available.\n")
 
 def get_effective_system_prompt():
-    """Return BEAST_SYSTEM with OS context and project context if available."""
+    """Return BEAST_SYSTEM with OS context, loaded jailbreak, and project context."""
     prompt = BEAST_SYSTEM + _os_context()
+    if LOADED_JAILBREAK:
+        prompt += "\n## LOADED JAILBREAK (active persona)\n" + LOADED_JAILBREAK + "\n"
     if PROJECT_CONTEXT:
         prompt += PROJECT_CONTEXT
     return prompt
@@ -1131,6 +1134,40 @@ def cmd_search(args):
         table.add_row(r.get("name", "?"), r.get("category", "?"), r.get("description", "")[:60])
     console.print(table)
 
+def _find_jailbreak(arg):
+    """Find a jailbreak file by number or name. Returns Path or None."""
+    if not JAILBREAKS_DIR.exists():
+        return None
+    variants = sorted(JAILBREAKS_DIR.glob("*.md"))
+    if not variants:
+        return None
+    arg = arg.lower()
+    if arg.isdigit() and 1 <= int(arg) <= len(variants):
+        return variants[int(arg) - 1]
+    for f in variants:
+        if arg in f.name.lower() or f.name.lower() in arg:
+            return f
+    return None
+
+def cmd_load(args):
+    """Load a Lisa jailbreak as BEAST's active persona (/load v6, /load lisa-v6-absolute)."""
+    global LOADED_JAILBREAK
+    if not args:
+        console.print(f"[{C['error']}]Usage: /load <nama|no>  (contoh: /load v6, /load lisa-v8)[/]")
+        return
+    target = _find_jailbreak(args[0])
+    if not target:
+        console.print(f"[{C['error']}]Jailbreak '{args[0]}' tidak ditemukan. /jailbreak buat list.[/]")
+        return
+    LOADED_JAILBREAK = target.read_text()
+    console.print(f"[{C['success']}]🔓 Loaded: {target.name} — persona aktif. /unload buat matiin.[/]")
+
+def cmd_unload():
+    """Clear loaded jailbreak persona."""
+    global LOADED_JAILBREAK
+    LOADED_JAILBREAK = ""
+    console.print(f"[{C['success']}]✓ Jailbreak di-unload. BEAST balik ke persona default.[/]")
+
 def cmd_jailbreak(args):
     """List or read Lisa jailbreak variants from bundled jailbreaks/."""
     if not JAILBREAKS_DIR.exists():
@@ -1149,20 +1186,11 @@ def cmd_jailbreak(args):
         for i, f in enumerate(variants, 1):
             table.add_row(str(i), f.name, f"{f.stat().st_size/1024:.0f}K")
         console.print(table)
-        console.print(f"\n[{C['dim']}]Baca: /jailbreak <nama|no>  (contoh: /jailbreak lisa-v6-absolute, /jailbreak 5)[/]")
+        console.print(f"\n[{C['dim']}]Baca: /jailbreak <nama|no>   ·   Pakai sebagai persona: /load <nama|no>   ·   Matiin: /unload[/]")
         return
-    arg = args[0].lower()
-    # Numeric or name match
-    target = None
-    if arg.isdigit() and 1 <= int(arg) <= len(variants):
-        target = variants[int(arg) - 1]
-    else:
-        for f in variants:
-            if arg in f.name.lower() or f.name.lower() in arg:
-                target = f
-                break
+    target = _find_jailbreak(args[0])
     if not target:
-        console.print(f"[{C['error']}]Jailbreak '{arg}' tidak ditemukan.[/]")
+        console.print(f"[{C['error']}]Jailbreak '{args[0]}' tidak ditemukan.[/]")
         return
     content = target.read_text()
     # Show header + first chunk
@@ -1171,6 +1199,7 @@ def cmd_jailbreak(args):
         title=f"[{C['accent']}]🔓 {target.name}[/]",
         border_style=C["accent"], box=box.ROUNDED,
     ))
+    console.print(f"[{C['dim']}]Pakai sebagai persona aktif: /load {target.name}[/]")
 
 def cmd_web(args):
     """Exa web search."""
@@ -1327,6 +1356,8 @@ def dispatch(cmd, args):
     elif cmd == "skill": cmd_skill(args)
     elif cmd == "search": cmd_search(args)
     elif cmd == "jailbreak": cmd_jailbreak(args)
+    elif cmd == "load": cmd_load(args)
+    elif cmd == "unload": cmd_unload()
     elif cmd == "web": cmd_web(args)
     elif cmd in ("cve", "cve-api"): cmd_cve_api(args)
     elif cmd == "probe": cmd_probe()
