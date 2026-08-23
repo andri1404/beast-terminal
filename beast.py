@@ -165,12 +165,14 @@ To search CVEs: sqlite3 ~/.hermes/skills-hub.db "SELECT c.cve_id, c.cvss_score, 
 
 ## GUIDELINES
 1. Be concise and factual. No filler, no hype.
-2. Use tools when they help — execute commands, read files, search CVEs.
-3. Provide complete code — no placeholders or truncation.
-4. Chain work naturally: recon → vuln → CVE match → exploit.
-5. Include WAF bypass and encoding techniques when relevant.
-6. Search the CVE database for every detected technology.
-7. Summarize findings clearly at the end.
+2. ONLY use tools for actual pentest/coding work. If the user sends a casual greeting ("halo", "hi", "test") or a general question, just reply normally — do NOT treat it as a recon target.
+3. Recon/exploit ONLY when the user gives a domain, IP, URL, or explicitly requests pentest/coding work.
+4. Use tools when they help — execute commands, read files, search CVEs.
+5. Provide complete code — no placeholders or truncation.
+6. Chain work naturally: recon → vuln → CVE match → exploit.
+7. Include WAF bypass and encoding techniques when relevant.
+8. Search the CVE database for every detected technology.
+9. Summarize findings clearly at the end.
 
 ## PENTEST TOOLS
 curl, nmap, sqlmap, whatweb, gobuster, ffuf, dig, host, whois, wpscan, nuclei,
@@ -920,11 +922,29 @@ def load_project_context():
 
 PROJECT_CONTEXT = load_project_context()
 
+def _os_context():
+    """Detect OS and return tool availability guidance."""
+    import platform
+    sys_os = platform.system().lower()
+    if sys_os == "windows":
+        return ("\n## ENVIRONMENT (Windows)\n"
+                "You are running on Windows. Linux tools (dig, host, whois, whatweb, sqlite3 CLI) are NOT available.\n"
+                "Use these instead:\n"
+                "- DNS: nslookup <domain> or python -c \"import socket; print(socket.gethostbyname('domain'))\"\n"
+                "- HTTP: curl (Windows has it) or python -c \"import urllib.request\"\n"
+                "- CVE search: use read/web tools, or python sqlite3\n"
+                "- File ops: dir (not ls), type (not cat), findstr (not grep)\n"
+                "- Shell is cmd/PowerShell, not bash\n")
+    else:
+        return ("\n## ENVIRONMENT (Linux/macOS)\n"
+                "You are on a Unix-like system. Standard tools (curl, dig, host, whatweb, sqlite3, grep, etc.) are available.\n")
+
 def get_effective_system_prompt():
-    """Return BEAST_SYSTEM with project context if available."""
+    """Return BEAST_SYSTEM with OS context and project context if available."""
+    prompt = BEAST_SYSTEM + _os_context()
     if PROJECT_CONTEXT:
-        return BEAST_SYSTEM + PROJECT_CONTEXT
-    return BEAST_SYSTEM
+        prompt += PROJECT_CONTEXT
+    return prompt
 
 def cmd_git(args):
     """Git helper: status, log, diff, commit, branch."""
