@@ -194,15 +194,31 @@ class Session:
         self.gateway = ACTIVE_GW
         self.commands = []
         self.tool_rounds = 0
+        self.per_model_tokens = {}
+        self.token_history = []
+        self.budget_limit = None
     
     def add_message(self, role, content):
         self.messages.append({"role": role, "content": content, "time": datetime.now().isoformat()})
     
-    def add_tokens(self, in_tok, out_tok):
+    def add_tokens(self, in_tok, out_tok, model=None):
         self.tokens["in"] += in_tok
         self.tokens["out"] += out_tok
         self.tokens["total"] += in_tok + out_tok
-        self.cost += (in_tok * 0.50 + out_tok * 2.00) / 1_000_000
+        cost = (in_tok * 0.50 + out_tok * 2.00) / 1_000_000
+        self.cost += cost
+        if model:
+            if model not in self.per_model_tokens:
+                self.per_model_tokens[model] = {"in": 0, "out": 0, "total": 0, "cost": 0.0}
+            self.per_model_tokens[model]["in"] += in_tok
+            self.per_model_tokens[model]["out"] += out_tok
+            self.per_model_tokens[model]["total"] += in_tok + out_tok
+            self.per_model_tokens[model]["cost"] += cost
+        self.token_history.append({
+            "time": datetime.now().isoformat(),
+            "in": in_tok, "out": out_tok, "cost": cost,
+            "model": model or "unknown",
+        })
     
     def save(self):
         path = SESSIONS_DIR / f"{self.id}.json"
@@ -616,6 +632,10 @@ def cmd_help():
         f"[bold {C['model']}]SESSION[/]\n"
         f"[{C['tool']}]  /model <id>[/]   Switch model\n"
         f"[{C['tool']}]  /gateways[/]     List gateways\n"
+        f"[{C['token']}]  /tokens[/]        Token breakdown per model\n"
+        f"[{C['success']}]  /cost[/]          Cost breakdown with rates\n"
+        f"[{C['warning']}]  /budget <$>[/]     Set spending limit\n"
+        f"[{C['dim']}]  /history[/]       Command history with costs\n"
         f"[{C['tool']}]  /permission <m>[/] Permission mode (normal/auto/plan)\n"
         f"[{C['tool']}]  /thinking[/]      Toggle thinking display\n"
         f"[{C['tool']}]  /compact[/]       Compress context\n"
@@ -733,6 +753,94 @@ def execute_shell(cmd):
     except Exception as e:
         console.print(f"[{C['error']}]{e}[/]")
 
+def cmd_tokens():
+    """Detailed token breakdown."""
+    table = Table(title="Token Usage", box=box.ROUNDED, border_style=C["dim"])
+    table.add_column("Model", style=C["model"])
+    table.add_column("Input", style=C["dim"], justify="right")
+    table.add_column("Output", style=C["dim"], justify="right")
+    table.add_column("Total", style=C["token"], justify="right")
+    table.add_column("Cost", style=C["success"], justify="right")
+    
+    for model, data in sorted(SESSION.per_model_tokens.items(), key=lambda x: -x[1]["total"]):
+        table.add_row(
+            model[:40],
+            f"{data['in']:,}", f"{data['out']:,}",
+            f"{data['total']:,}", f"${data['cost']:.6f}",
+        )
+    
+    table.add_row("─"*20, "─"*8, "─"*8, "─"*8, "─"*10, style=C["dim"])
+    table.add_row(
+        "[bold]TOTAL[/]", f"{SESSION.tokens['in']:,}", f"{SESSION.tokens['out']:,}",
+        f"[bold]{SESSION.tokens['total']:,}[/]", f"[bold]${SESSION.cost:.6f}[/]",
+        style="bold",
+    )
+    
+    if SESSION.budget_limit:
+        pct = (SESSION.cost / SESSION.budget_limit) * 100
+        color = C["success"] if pct < 50 else C["warning"] if pct < 80 else C["error"]
+        table.add_row("", "", "", f"[{color}]Budget: {pct:.1f}%[/]", f"[{color}]${SESSION.budget_limit:.4f}[/]")
+    
+    console.print(table)
+
+def cmd_cost():
+    """Cost breakdown."""
+    elapsed = datetime.now() - SESSION.start
+    hours = elapsed.total_seconds() / 3600
+    rate = SESSION.cost / max(hours, 0.001)
+    tok_rate = SESSION.tokens["total"] / max(hours, 0.001)
+    avg_cost = SESSION.cost / max(len(SESSION.token_history), 1)
+    
+    lines = []
+    lines.append(f"[{C['token']}]Session Tokens:[/] {SESSION.tokens['total']:,} ([{C['dim']}]in: {SESSION.tokens['in']:,}, out: {SESSION.tokens['out']:,})[/]")
+    lines.append(f"[{C['success']}]Session Cost:[/] ${SESSION.cost:.6f}")
+    lines.append(f"[{C['dim']}]Rate:[/] ${rate:.4f}/hr ({tok_rate:.0f} tok/hr)")
+    lines.append(f"[{C['dim']}]Avg per request:[/] ${avg_cost:.6f}")
+    lines.append(f"[{C['dim']}]Total requests:[/] {len(SESSION.token_history)}")
+    lines.append("")
+    lines.append(f"[{C['model']}]Per-Model:[/]")
+    for m, d in sorted(SESSION.per_model_tokens.items(), key=lambda x: -x[1]["cost"]):
+        lines.append(f"  [{C['dim']}]{m[:40]}:[/] {d['total']:,}t = [{C['success']}]${d['cost']:.6f}[/]")
+    if SESSION.budget_limit:
+        pct = SESSION.cost / SESSION.budget_limit * 100
+        lines.append(f"[{C['warning']}]Budget: {pct:.1f}% of ${SESSION.budget_limit:.4f}[/]")
+    
+    console.print(Panel("\n".join(lines), title="[bold]Cost Breakdown[/]", border_style=C["dim"], box=box.ROUNDED))
+def cmd_budget(args):
+    """Set spending limit."""
+    if not args:
+        if SESSION.budget_limit:
+            pct = (SESSION.cost / SESSION.budget_limit) * 100
+            console.print(f"[{C['model']}]Budget: ${SESSION.budget_limit:.4f} — [{C['success'] if pct < 80 else C['error']}]{pct:.1f}% used[/]")
+        else:
+            console.print(f"[{C['dim']}]No budget set. Use /budget <amount>[/]")
+        return
+    try:
+        limit = float(args[0])
+        SESSION.budget_limit = limit
+        console.print(f"[{C['success']}]✓ Budget set: ${limit:.4f}[/]")
+    except ValueError:
+        console.print(f"[{C['error']}]Invalid amount[/]")
+
+def cmd_history():
+    """Show command history with token costs."""
+    table = Table(box=box.ROUNDED, border_style=C["dim"])
+    table.add_column("#", style=C["dim"], width=3)
+    table.add_column("Command", style="bold", max_width=40)
+    table.add_column("Tokens", style=C["token"], justify="right")
+    table.add_column("Cost", style=C["success"], justify="right")
+    
+    for i, cmd in enumerate(SESSION.commands[-20:]):
+        preview = cmd[:40] + "..." if len(cmd) > 40 else cmd
+        tok_data = SESSION.token_history[i] if i < len(SESSION.token_history) else {}
+        table.add_row(
+            str(i+1), preview,
+            f"{tok_data.get('total', tok_data.get('in',0)+tok_data.get('out',0)):,}",
+            f"${tok_data.get('cost', 0):.6f}",
+        )
+    
+    console.print(table)
+
 # ═══════════════════════════════════════════════════════════════
 # PENTEST PROMPTS
 # ═══════════════════════════════════════════════════════════════
@@ -754,6 +862,10 @@ def dispatch(cmd, args):
     elif cmd == "permission": cmd_permission(args)
     elif cmd == "thinking": cmd_thinking()
     elif cmd == "compact": cmd_compact()
+    elif cmd == "tokens": cmd_tokens()
+    elif cmd == "cost": cmd_cost()
+    elif cmd == "budget": cmd_budget(args)
+    elif cmd == "history": cmd_history()
     elif cmd == "probe": cmd_probe()
     elif cmd == "status": cmd_status()
     elif cmd == "clear": cmd_clear()
@@ -792,6 +904,9 @@ def render_status_bar():
     left = Text()
     left.append(f" {gw['name']} ", style=f"bold {C['model']}")
     left.append(f"│ {perm} ", style=C['dim'])
+    if SESSION.budget_limit:
+        pct = SESSION.cost / SESSION.budget_limit * 100
+        left.append(f"│ ${SESSION.cost:.4f}/${SESSION.budget_limit:.2f} ", style=C['warning'] if pct > 50 else C['dim'])
     right = Text()
     right.append(f" {SESSION.tokens['total']:,}t ", style=C['token'])
     right.append(f"│ ${SESSION.cost:.4f} ", style=C['success'])
@@ -851,7 +966,7 @@ def main():
     
     history_file = str(BEAST_DIR / "history")
     completions = list(PENTEST.keys()) + ["auto", "model", "gateways", "permission", "thinking", 
-                    "compact", "clear", "save", "export", "status", "probe", "help", "exit"]
+                    "compact", "clear", "save", "export", "status", "probe", "tokens", "cost", "budget", "history", "help", "exit"]
     completer = WordCompleter(["/" + c for c in completions], ignore_case=True, sentence=True)
     
     style = Style.from_dict({"prompt": f"bold {C['accent']}", "sep": C['dim'], "gw": f"bold {C['model']}"})
