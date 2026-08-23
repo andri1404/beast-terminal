@@ -2,148 +2,396 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
 <title>BEAST Terminal</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  background: #0a0a0f;
-  height: 100vh;
-  overflow: hidden;
-  font-family: monospace;
+:root {
+  --bg: #0a0a0f;
+  --header-bg: #111118;
+  --accent: #FF6B35;
+  --accent2: #00C853;
+  --border: #2a2a3a;
+  --text: #c0c0c0;
+  --dim: #757575;
+  --font: 'Courier New', 'DejaVu Sans Mono', 'SF Mono', monospace;
+  --header-h: 44px;
+  --toolbar-h: 38px;
+  --font-size: 13px;
 }
+body {
+  background: var(--bg);
+  height: 100vh; height: 100dvh;
+  overflow: hidden;
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── HEADER ── */
 #header {
-  background: #111118;
-  border-bottom: 2px solid #FF6B35;
-  padding: 8px 16px;
+  background: var(--header-bg);
+  border-bottom: 2px solid var(--accent);
+  padding: 0 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 40px;
+  height: var(--header-h);
+  gap: 8px;
 }
 #header .logo {
-  color: #FF6B35;
+  color: var(--accent);
   font-weight: bold;
   font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
+#header .mode-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+.mode-badge.pentest { background: #FF6B3522; color: var(--accent); border: 1px solid #FF6B3544; }
+.mode-badge.coding { background: #448AFF22; color: #448AFF; border: 1px solid #448AFF44; }
+.mode-badge.general { background: #E040FB22; color: #E040FB; border: 1px solid #E040FB44; }
+
 #header .info {
-  color: #757575;
-  font-size: 12px;
+  color: var(--dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: center;
+  min-width: 0;
 }
-#header .info span {
-  color: #E040FB;
+#header .info span { color: #E040FB; }
+
+/* ── TOOLBAR ── */
+#toolbar {
+  background: #0d0d14;
+  border-bottom: 1px solid var(--border);
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  height: var(--toolbar-h);
+  gap: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
-#header .actions button {
+#toolbar button {
   background: #1a1a2e;
   color: #00BCD4;
-  border: 1px solid #2a2a3a;
-  padding: 4px 12px;
+  border: 1px solid var(--border);
+  padding: 3px 10px;
   border-radius: 3px;
   cursor: pointer;
   font-size: 11px;
-  margin-left: 8px;
+  font-family: var(--font);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s;
 }
-#header .actions button:hover {
-  background: #FF6B35;
+#toolbar button:hover, #toolbar button.active {
+  background: var(--accent);
   color: #fff;
-  border-color: #FF6B35;
+  border-color: var(--accent);
+}
+#toolbar button.mode-btn {
+  background: #1a1a2e;
+  color: var(--dim);
+  font-weight: bold;
+}
+#toolbar button.mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+#toolbar .sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+#toolbar button.quick-cmd {
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
+/* ── TERMINAL ── */
+#terminal-wrapper {
+  height: calc(100vh - var(--header-h) - var(--toolbar-h));
+  height: calc(100dvh - var(--header-h) - var(--toolbar-h));
+  padding: 2px;
 }
 #terminal {
-  height: calc(100vh - 40px);
-  padding: 4px;
+  height: 100%;
 }
-.connecting {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%,-50%);
-  color: #FF6B35;
-  font-size: 18px;
+
+/* ── MOBILE KEYBOARD BAR ── */
+#mobile-bar {
+  display: none;
+  background: #111118;
+  border-top: 1px solid var(--border);
+  padding: 4px 8px;
+  gap: 4px;
+  flex-wrap: wrap;
+  height: auto;
+}
+#mobile-bar button {
+  background: #1a1a2e;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font);
+  cursor: pointer;
+  min-width: 28px;
   text-align: center;
 }
+#mobile-bar button:active { background: var(--accent); color: #fff; }
+#mobile-bar button.tab { min-width: 40px; }
+#mobile-bar button.enter { min-width: 50px; background: #FF6B3533; color: var(--accent); }
+
+.connecting {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  color: var(--accent); font-size: 16px; text-align: center; z-index: 100;
+  background: #0a0a0fee; padding: 20px 30px; border-radius: 8px;
+}
 .connecting .spinner {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #333;
-  border-top: 2px solid #FF6B35;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 10px;
-  vertical-align: middle;
+  display: inline-block; width: 18px; height: 18px;
+  border: 2px solid #333; border-top: 2px solid var(--accent);
+  border-radius: 50%; animation: spin 1s linear infinite;
+  margin-right: 8px; vertical-align: middle;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  :root { --font-size: 11px; --header-h: 40px; --toolbar-h: 34px; }
+  #header .logo { font-size: 12px; }
+  #header .info { display: none; }
+  #header .mode-badge { font-size: 9px; padding: 1px 6px; }
+  #toolbar button { font-size: 10px; padding: 2px 7px; }
+  #toolbar button.quick-cmd { display: none; }
+  #mobile-bar { display: flex; }
+  #terminal-wrapper { height: calc(100dvh - var(--header-h) - var(--toolbar-h) - 50px); }
+}
+
+@media (max-width: 480px) {
+  :root { --font-size: 10px; --header-h: 36px; --toolbar-h: 0px; }
+  #toolbar { display: none; }
+  #header .actions button { font-size: 9px; padding: 2px 6px; }
+  #terminal-wrapper { height: calc(100dvh - var(--header-h) - 70px); }
+}
+
+@media (min-width: 1400px) {
+  :root { --font-size: 14px; }
+}
 </style>
 </head>
 <body>
+
+<!-- HEADER -->
 <div id="header">
-  <div class="logo">🔥 BEAST Terminal</div>
+  <div class="logo">🔥 BEAST</div>
+  <div class="mode-badge pentest" id="mode-badge">PENTEST</div>
   <div class="info">Session: <span id="session-id">connecting...</span></div>
-  <div class="actions">
-    <button onclick="newSession()">New Session</button>
-    <button onclick="killSession()">Kill</button>
+  <div class="actions" id="header-actions">
+    <button onclick="switchMode('pentest')" title="Pentest Mode">P</button>
+    <button onclick="switchMode('coding')" title="Coding Mode">C</button>
+    <button onclick="switchMode('general')" title="General Mode">G</button>
+    <button onclick="newSession()">+</button>
     <button onclick="toggleFullscreen()">⛶</button>
   </div>
 </div>
-<div id="terminal"></div>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <button class="mode-btn active" data-mode="pentest" onclick="switchMode('pentest')">🔥 Pentest</button>
+  <button class="mode-btn" data-mode="coding" onclick="switchMode('coding')">💻 Coding</button>
+  <button class="mode-btn" data-mode="general" onclick="switchMode('general')">🧠 General</button>
+  <span class="sep"></span>
+  <button onclick="sendCmd('/recon ')">/recon</button>
+  <button onclick="sendCmd('/exploit ')">/exploit</button>
+  <button onclick="sendCmd('/cve ')">/cve</button>
+  <button onclick="sendCmd('/chain ')">/chain</button>
+  <button onclick="sendCmd('/auto ')">/auto</button>
+  <span class="sep"></span>
+  <button class="quick-cmd" onclick="sendCmd('/gateways')">gateways</button>
+  <button class="quick-cmd" onclick="sendCmd('/tokens')">tokens</button>
+  <button class="quick-cmd" onclick="sendCmd('/cost')">cost</button>
+  <button class="quick-cmd" onclick="sendCmd('/status')">status</button>
+  <button class="quick-cmd" onclick="sendCmd('/help')">help</button>
+</div>
+
+<!-- TERMINAL -->
+<div id="terminal-wrapper"><div id="terminal"></div></div>
+
+<!-- MOBILE BAR -->
+<div id="mobile-bar">
+  <button onclick="sendKey('Tab')" class="tab">Tab</button>
+  <button onclick="sendKey('Escape')">Esc</button>
+  <button onclick="sendKey('/')">/</button>
+  <button onclick="sendKey('ArrowUp')">↑</button>
+  <button onclick="sendKey('ArrowDown')">↓</button>
+  <button onclick="sendKey('ArrowLeft')">←</button>
+  <button onclick="sendKey('ArrowRight')">→</button>
+  <button onclick="sendKey('Enter')" class="enter">↵</button>
+  <button onclick="sendKey('CtrlC')">^C</button>
+  <button onclick="sendKey('CtrlD')">^D</button>
+  <button onclick="sendKey(' ')">␣</button>
+</div>
+
 <div class="connecting" id="connecting">
-  <div class="spinner"></div> Connecting to BEAST...
+  <div class="spinner"></div> Connecting...
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.4/dist/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
 <script>
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let currentMode = localStorage.getItem('beast_mode') || 'pentest';
+let sessionId = localStorage.getItem('beast_session') || '';
+
+// ═══════════════════════════════════════════════
+// MODE SWITCHING
+// ═══════════════════════════════════════════════
+const MODE_CONFIG = {
+  pentest: {
+    name: 'PENTEST',
+    class: 'pentest',
+    color: '#FF6B35',
+    systemPrompt: 'PENTEST MODE',
+    quickCmds: ['/recon ','/exploit ','/cve ','/chain ','/auto ','/bypass ','/sqlmap '],
+    welcome: '🔥 BEAST Pentest Mode — /recon /exploit /cve /auto\r\n\r\n',
+  },
+  coding: {
+    name: 'CODING',
+    class: 'coding',
+    color: '#448AFF',
+    systemPrompt: 'CODING MODE',
+    quickCmds: ['/! git ','/! python3 ','/! npm ','/! curl ','/! cat ','/! ls ','/! find '],
+    welcome: '💻 BEAST Coding Mode — /! command /help\r\n\r\n',
+  },
+  general: {
+    name: 'GENERAL',
+    class: 'general',
+    color: '#E040FB',
+    systemPrompt: 'GENERAL MODE',
+    quickCmds: ['/! ','/help','/status','/tokens','/cost','/gateways'],
+    welcome: '🧠 BEAST General Mode — /help for commands\r\n\r\n',
+  }
+};
+
+function switchMode(mode) {
+  currentMode = mode;
+  localStorage.setItem('beast_mode', mode);
+  
+  const config = MODE_CONFIG[mode];
+  
+  // Update badge
+  const badge = document.getElementById('mode-badge');
+  badge.textContent = config.name;
+  badge.className = 'mode-badge ' + config.class;
+  
+  // Update toolbar buttons
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  
+  // Update terminal cursor color
+  term.options.cursor = config.color;
+  
+  // Update accent
+  document.documentElement.style.setProperty('--accent', config.color);
+  
+  // Update quick command buttons
+  updateQuickCmds(mode);
+  
+  // Send mode switch to server
+  socket.emit('mode', { session_id: sessionId, mode: mode });
+}
+
+function updateQuickCmds(mode) {
+  const toolbar = document.getElementById('toolbar');
+  // Remove existing quick cmds
+  toolbar.querySelectorAll('.quick-cmd').forEach(b => b.remove());
+  
+  // Add mode-specific quick cmds
+  const config = MODE_CONFIG[mode];
+  const sep = toolbar.querySelector('.sep:last-of-type');
+  config.quickCmds.forEach(cmd => {
+    const btn = document.createElement('button');
+    btn.className = 'quick-cmd';
+    btn.textContent = cmd.replace('/','').replace(' ','');
+    btn.onclick = () => sendCmd(cmd);
+    toolbar.insertBefore(btn, sep.nextSibling || sep);
+  });
+}
+
 // ═══════════════════════════════════════════════
 // TERMINAL SETUP
 // ═══════════════════════════════════════════════
+const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent) || window.innerWidth < 768;
+const fontSize = isMobile ? (window.innerWidth < 480 ? 10 : 11) : (window.innerWidth > 1400 ? 14 : 13);
 
 const term = new Terminal({
   cursorBlink: true,
-  fontSize: 13,
-  fontFamily: "'Courier New', 'DejaVu Sans Mono', monospace",
+  fontSize: fontSize,
+  fontFamily: "'Courier New', 'DejaVu Sans Mono', 'SF Mono', monospace",
   theme: {
     background: '#0a0a0f',
     foreground: '#c0c0c0',
-    cursor: '#FF6B35',
+    cursor: MODE_CONFIG[currentMode].color,
     cursorAccent: '#0a0a0f',
     selectionBackground: '#FF6B3533',
-    black: '#1a1a2e',
-    red: '#FF1744',
-    green: '#00C853',
-    yellow: '#FFD600',
-    blue: '#448AFF',
-    magenta: '#E040FB',
-    cyan: '#00BCD4',
-    white: '#e0e0e0',
-    brightBlack: '#757575',
-    brightRed: '#FF5252',
-    brightGreen: '#69F0AE',
-    brightYellow: '#FFFF00',
-    brightBlue: '#82B1FF',
-    brightMagenta: '#EA80FC',
-    brightCyan: '#84FFFF',
-    brightWhite: '#ffffff',
+    black: '#1a1a2e', red: '#FF1744', green: '#00C853', yellow: '#FFD600',
+    blue: '#448AFF', magenta: '#E040FB', cyan: '#00BCD4', white: '#e0e0e0',
+    brightBlack: '#757575', brightRed: '#FF5252', brightGreen: '#69F0AE',
+    brightYellow: '#FFFF00', brightBlue: '#82B1FF', brightMagenta: '#EA80FC',
+    brightCyan: '#84FFFF', brightWhite: '#ffffff',
   },
   allowProposedApi: true,
   scrollback: 10000,
+  allowTransparency: true,
+  macOptionIsMeta: true,
 });
 
 const fitAddon = new FitAddon.FitAddon();
+const webLinksAddon = new WebLinksAddon.WebLinksAddon();
 term.loadAddon(fitAddon);
+term.loadAddon(webLinksAddon);
 term.open(document.getElementById('terminal'));
 fitAddon.fit();
 
-window.addEventListener('resize', () => fitAddon.fit());
+window.addEventListener('resize', () => {
+  fitAddon.fit();
+  // Recalculate font size on resize
+  const w = window.innerWidth;
+  const newSize = w < 480 ? 10 : w < 768 ? 11 : w > 1400 ? 14 : 13;
+  if (newSize !== term.options.fontSize) {
+    term.options.fontSize = newSize;
+  }
+});
 
 // ═══════════════════════════════════════════════
 // WEBSOCKET
 // ═══════════════════════════════════════════════
-
-let sessionId = localStorage.getItem('beast_session') || '';
 const socket = io({
-  query: { session_id: sessionId },
+  query: { session_id: sessionId, mode: currentMode },
   transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionDelay: 1000,
@@ -159,7 +407,8 @@ socket.on('connected', (data) => {
   localStorage.setItem('beast_session', sessionId);
   document.getElementById('session-id').textContent = data.session_name;
   term.clear();
-  term.write(data.message + '\r\n\r\n');
+  const config = MODE_CONFIG[currentMode];
+  term.write(config.welcome + data.message + '\r\n');
 });
 
 socket.on('output', (data) => {
@@ -180,20 +429,39 @@ socket.on('killed', (data) => {
 socket.on('disconnect', () => {
   document.getElementById('connecting').style.display = 'block';
   document.getElementById('connecting').innerHTML = 
-    '<div class="spinner"></div> Reconnecting... (session preserved)';
+    '<div class="spinner"></div> Reconnecting...';
 });
 
 // ═══════════════════════════════════════════════
 // INPUT
 // ═══════════════════════════════════════════════
-
 term.onData((data) => {
   socket.emit('input', { session_id: sessionId, text: data });
 });
 
+term.onPaste = (text) => {
+  socket.emit('input', { session_id: sessionId, text: text });
+};
+
 // ═══════════════════════════════════════════════
 // ACTIONS
 // ═══════════════════════════════════════════════
+function sendCmd(cmd) {
+  socket.emit('input', { session_id: sessionId, text: cmd });
+  term.focus();
+}
+
+function sendKey(key) {
+  const keyMap = {
+    'Enter': '\r', 'Tab': '\t', 'Escape': '\x1b',
+    'ArrowUp': '\x1b[A', 'ArrowDown': '\x1b[B',
+    'ArrowLeft': '\x1b[D', 'ArrowRight': '\x1b[C',
+    'CtrlC': '\x03', 'CtrlD': '\x04', ' ': ' ',
+  };
+  const mapped = keyMap[key] || key;
+  socket.emit('input', { session_id: sessionId, text: mapped });
+  term.focus();
+}
 
 function newSession() {
   localStorage.removeItem('beast_session');
@@ -210,16 +478,26 @@ function killSession() {
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen();
+    document.documentElement.requestFullscreen().catch(()=>{});
   } else {
     document.exitFullscreen();
   }
 }
 
-// Handle paste
-term.onPaste = (text) => {
-  socket.emit('input', { session_id: sessionId, text: text });
-};
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+switchMode(currentMode);
+
+// Focus terminal on tap (mobile)
+document.getElementById('terminal-wrapper').addEventListener('click', () => {
+  term.focus();
+});
+
+// Prevent zoom on double tap (mobile)
+document.addEventListener('dblclick', (e) => {
+  if (e.target.closest('#terminal-wrapper')) e.preventDefault();
+}, { passive: false });
 </script>
 </body>
 </html>

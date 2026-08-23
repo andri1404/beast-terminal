@@ -23,9 +23,15 @@ from collections import defaultdict
 # ═══════════════════════════════════════════════
 
 BEAST_DIR = Path(__file__).resolve().parent.parent
-TMUX_SESSIONS = {}  # user_id -> {"session_name": str, "pid": int, "created": datetime}
+TMUX_SESSIONS = {}
 SESSIONS_DIR = Path.home() / ".beast" / "web_sessions"
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+MODE_SYSTEM_PROMPTS = {
+    "pentest": "PENTEST MODE: You are BEAST, a penetration testing AI. Use /recon /exploit /cve /auto commands.",
+    "coding": "CODING MODE: You are a senior software engineer. Write clean, efficient code. Use /! for shell commands.",
+    "general": "GENERAL MODE: You are a helpful AI assistant. Use /help for available commands.",
+}
 
 app = Flask(__name__, static_folder="static", template_folder="static")
 app.config["SECRET_KEY"] = os.urandom(24).hex()
@@ -35,9 +41,10 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # TMUX SESSION MANAGEMENT
 # ═══════════════════════════════════════════════
 
-def create_tmux_session(session_id):
+def create_tmux_session(session_id, mode="pentest"):
     """Create a new tmux session running BEAST terminal."""
     session_name = f"beast-{session_id[:8]}"
+    mode_prompt = MODE_SYSTEM_PROMPTS.get(mode, MODE_SYSTEM_PROMPTS["pentest"])
     
     # Kill existing session if any
     subprocess.run(f"tmux kill-session -t {session_name}", shell=True, stderr=subprocess.DEVNULL)
@@ -109,8 +116,9 @@ def handle_connect():
     join_room(session_id)
     
     # Create or resume tmux session
+    mode = request.args.get("mode", "pentest")
     if session_id not in TMUX_SESSIONS:
-        name, error = create_tmux_session(session_id)
+        name, error = create_tmux_session(session_id, mode)
         if error:
             emit("error", {"message": f"Failed to create session: {error}"})
             return
@@ -147,6 +155,15 @@ def handle_resize(data):
         session_name = TMUX_SESSIONS[session_id]["session_name"]
         subprocess.run(f"tmux resize-window -t {session_name} -x {cols} -y {rows}",
                       shell=True, stderr=subprocess.DEVNULL)
+
+@socketio.on("mode")
+def handle_mode(data):
+    session_id = data.get("session_id", "")
+    mode = data.get("mode", "pentest")
+    if session_id in TMUX_SESSIONS:
+        TMUX_SESSIONS[session_id]["mode"] = mode
+        prompt = MODE_SYSTEM_PROMPTS.get(mode, "")
+        send_to_tmux(session_id, f"\n\x1b[33m[MODE: {mode.upper()}]\x1b[0m\n")
 
 @socketio.on("disconnect")
 def handle_disconnect():
