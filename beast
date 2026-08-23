@@ -1,0 +1,10 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════
+# BEAST TERMINAL — Multi-Gateway Pentest CLI
+# ═══════════════════════════════════════════════════════════════
+
+BEAST_DIR="$HOME/pentest-cli"
+BEAST_PY="$BEAST_DIR/beast.py"
+
+# Forward all args to Python script
+exec python3 "$BEAST_PY" "$@"
