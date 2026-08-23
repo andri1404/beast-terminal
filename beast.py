@@ -60,7 +60,7 @@ DEFAULT_CONFIG = {
     "temperature": 0.7,
     "auto_save": True,
     "permission_mode": "auto",  # normal | auto | plan
-    "show_thinking": True,
+    "show_thinking": False,
     "max_tool_rounds": 10,
     "auto_compact_tokens": 50000,
 }
