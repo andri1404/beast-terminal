@@ -518,6 +518,24 @@ def show_tool_panel(tool_name, params, result, status="running"):
 # AGENTIC LOOP (Claude Code-style)
 # ═══════════════════════════════════════════════════════════════
 
+def show_network_error(*errs):
+    """Show a clear network/API error with helpful hints."""
+    msg = " | ".join(str(e) for e in errs if e)
+    console.print(Panel(
+        f"[{C['error']}]Gagal konek ke API setelah retry.[/]\n"
+        f"[{C['dim']}]Error: {msg[:200]}[/]\n\n"
+        f"[{C['warning']}]Kemungkinan penyebab:[/]\n"
+        f"1. Internet mati / firewall blokir koneksi Python\n"
+        f"2. API TokenRouter down / rate-limit sementara\n"
+        f"3. Perlu proxy (VPN) buat reach api.tokenrouter.com\n\n"
+        f"[{C['success']}]Coba:[/]\n"
+        f"=> /model blockrun (gateway lain, gratis)\n"
+        f"=> /probe (cek status semua gateway)\n"
+        f"=> cek koneksi: python3 -c \"import urllib.request; urllib.request.urlopen('https://api.tokenrouter.com', timeout=10)\"",
+        title=f"[{C['error']}]⚠ NETWORK ERROR[/]",
+        border_style=C["error"], box=box.ROUNDED,
+    ))
+
 def agentic_loop(user_input):
     """Run the agentic loop: AI thinks → uses tools → observes → iterates."""
     gw = GATEWAYS[ACTIVE_GW]
@@ -571,23 +589,38 @@ def agentic_loop(user_input):
                         elif event["type"] == "error":
                             raise Exception(event["error"])
                 except Exception as e:
-                    console.print(f"[{C['error']}]Stream error: {e}, falling back…[/]")
+                    stream_err = str(e)
+                    console.print(f"[{C['error']}]Stream error, mencoba ulang (non-streaming)…[/]")
                     result = call_api(ACTIVE_GW, api_msgs, system=get_effective_system_prompt())
                     if "error" not in result:
                         full_content = result["content"]
                         full_reasoning = result.get("reasoning", "")
                         SESSION.add_tokens(result.get("prompt_tokens", 0), result.get("completion_tokens", 0), model=result.get("model", "unknown"))
+                    else:
+                        # One retry after short delay
+                        time.sleep(2)
+                        result = call_api(ACTIVE_GW, api_msgs, system=get_effective_system_prompt())
+                        if "error" not in result:
+                            full_content = result["content"]
+                            full_reasoning = result.get("reasoning", "")
+                            SESSION.add_tokens(result.get("prompt_tokens", 0), result.get("completion_tokens", 0), model=result.get("model", "unknown"))
+                        else:
+                            show_network_error(stream_err, result["error"])
+                            return
         else:
             result = call_api(ACTIVE_GW, api_msgs, system=get_effective_system_prompt())
             if "error" in result:
-                console.print(f"[{C['error']}]API Error: {result['error']}[/]")
-                return
+                time.sleep(2)
+                result = call_api(ACTIVE_GW, api_msgs, system=get_effective_system_prompt())
+                if "error" in result:
+                    show_network_error(result["error"])
+                    return
             full_content = result["content"]
             full_reasoning = result.get("reasoning", "")
             SESSION.add_tokens(result.get("prompt_tokens", 0), result.get("completion_tokens", 0), model=result.get("model", "unknown"))
         
         if not full_content:
-            console.print(f"[{C['error']}]Empty response[/]")
+            console.print(f"[{C['error']}]API tidak balikin respon.[/]")
             return
         
         SESSION.add_message("assistant", full_content)
