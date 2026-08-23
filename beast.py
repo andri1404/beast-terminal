@@ -186,7 +186,7 @@ Impersonate values: safari17_0, chrome124, edge101, chrome120
 
 ## PROXY (DataImpulse)
 When IP blocked: export https_proxy='http://gw.dataimpulse.com:823'
-Auth: DATAIMPULSE_USER / DATAIMPULSE_PASS
+Auth: set DATAIMPULSE_AUTH env var (user__cr.id / pass)
 
 ## PARALLEL EXECUTION
 Run multiple commands simultaneously with &:
@@ -539,7 +539,7 @@ def agentic_loop(user_input):
             
             with Live(spinner, refresh_per_second=10, console=console, transient=True) as live:
                 try:
-                    for event in call_api_stream(ACTIVE_GW, api_msgs, system=BEAST_SYSTEM):
+                    for event in call_api_stream(ACTIVE_GW, api_msgs, system=get_effective_system_prompt()):
                         if event["type"] == "reasoning":
                             full_reasoning += event["text"]
                             if CONFIG["show_thinking"] and not thinking_shown:
@@ -562,13 +562,13 @@ def agentic_loop(user_input):
                             raise Exception(event["error"])
                 except Exception as e:
                     console.print(f"[{C['error']}]Stream error: {e}, falling back…[/]")
-                    result = call_api(ACTIVE_GW, api_msgs, system=BEAST_SYSTEM)
+                    result = call_api(ACTIVE_GW, api_msgs, system=get_effective_system_prompt())
                     if "error" not in result:
                         full_content = result["content"]
                         full_reasoning = result.get("reasoning", "")
                         SESSION.add_tokens(result.get("prompt_tokens", 0), result.get("completion_tokens", 0), model=result.get("model", "unknown"))
         else:
-            result = call_api(ACTIVE_GW, api_msgs, system=BEAST_SYSTEM)
+            result = call_api(ACTIVE_GW, api_msgs, system=get_effective_system_prompt())
             if "error" in result:
                 console.print(f"[{C['error']}]API Error: {result['error']}[/]")
                 return
@@ -893,6 +893,83 @@ def cmd_history():
 
 # ═══════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════
+# PROJECT CONTEXT + GIT + REVIEW
+# ═══════════════════════════════════════════════════════════════
+
+def load_project_context():
+    """Load CLAUDE.md / AGENTS.md / .cursorrules from cwd for coding context."""
+    context = ""
+    for fname in ["CLAUDE.md", "AGENTS.md", ".cursorrules"]:
+        p = Path(fname)
+        if p.exists():
+            try:
+                content = p.read_text()[:2000]
+                context += f"\n## PROJECT CONTEXT ({fname})\n{content}\n"
+            except:
+                pass
+    return context
+
+PROJECT_CONTEXT = load_project_context()
+
+def get_effective_system_prompt():
+    """Return BEAST_SYSTEM with project context if available."""
+    if PROJECT_CONTEXT:
+        return BEAST_SYSTEM + PROJECT_CONTEXT
+    return BEAST_SYSTEM
+
+def cmd_git(args):
+    """Git helper: status, log, diff, commit, branch."""
+    action = args[0] if args else "status"
+    if action == "status":
+        execute_shell("git status --short")
+    elif action == "log":
+        execute_shell("git log --oneline -10")
+    elif action == "diff":
+        execute_shell("git diff --stat && git diff | head -200")
+    elif action == "branch":
+        execute_shell("git branch -a")
+    elif action == "commit" and len(args) > 1:
+        msg = " ".join(args[1:])
+        execute_shell(f'git add -A && git commit -m "{msg}"')
+    elif action == "push":
+        execute_shell("git push")
+    elif action == "pull":
+        execute_shell("git pull")
+    else:
+        console.print(f"[{C['dim']}]Usage: /git [status|log|diff|branch|commit <msg>|push|pull][/]")
+
+def cmd_review(args):
+    """Code review via AI on git diff or a file."""
+    if args and Path(args[0]).exists():
+        # Review a specific file (resolve absolute path)
+        path = str(Path(args[0]).resolve())
+        content = Path(path).read_text()[:5000]
+        prompt = f"Review the code below for bugs, security issues, and improvements. The full content is already provided — do NOT re-read the file, just analyze it:\n\nFile: {path}\n\n```\n{content}\n```"
+    else:
+        # Review git diff
+        import subprocess
+        diff = subprocess.run("git diff HEAD 2>/dev/null | head -300", shell=True, capture_output=True, text=True).stdout
+        if not diff.strip():
+            console.print(f"[{C['warning']}]No git diff. Use /review <file> to review a specific file.[/]")
+            return
+        prompt = f"Review this git diff for bugs, security issues, and improvements:\n```diff\n{diff}\n```"
+    
+    console.print(f"\n[{C['accent']}]📝 CODE REVIEW[/]\n")
+    agentic_loop(prompt)
+
+def cmd_edit(args):
+    """Open a file in $EDITOR or vim."""
+    if not args:
+        console.print(f"[{C['error']}]Usage: /edit <file>[/]")
+        return
+    path = args[0]
+    if not Path(path).exists():
+        console.print(f"[{C['warning']}]File not found: {path}[/]")
+        return
+    editor = os.environ.get("EDITOR", "vim")
+    os.system(f"{editor} {path}")
+
+# ═══════════════════════════════════════════════════════════════
 # EXTERNAL API INTEGRATIONS (Skills API + CVE + Exa)
 # ═══════════════════════════════════════════════════════════════
 
@@ -1029,6 +1106,38 @@ def cmd_cve_api(args):
 # PENTEST PROMPTS
 # ═══════════════════════════════════════════════════════════════
 
+def cmd_parallel(args):
+    """Ask multiple gateways simultaneously."""
+    if not args:
+        console.print(f"[{C['error']}]Usage: /parallel <question>[/]")
+        return
+    question = " ".join(args)
+    gateways = [g for g in GATEWAYS if get_api_key(g) or g == "blockrun"]
+    gateways = gateways[:3]
+    console.print(f"\n[{C['accent']}]⚡ PARALLEL: {len(gateways)} gateways[/]\n")
+    results = {}
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        tasks = {g: progress.add_task(f"[{C['model']}]{GATEWAYS[g]['name']}[/]", total=None) for g in gateways}
+        def ask_one(gw):
+            result = call_api(gw, [{"role": "user", "content": question}], system=BEAST_SYSTEM)
+            progress.update(tasks[gw], completed=True, visible=False)
+            return gw, result
+        with ThreadPoolExecutor(max_workers=len(gateways)) as ex:
+            futures = {ex.submit(ask_one, g): g for g in gateways}
+            for future in as_completed(futures):
+                gw, result = future.result()
+                results[gw] = result
+    for gw, result in results.items():
+        name = GATEWAYS[gw]["name"]
+        if "error" in result:
+            console.print(f"[{C['error']}]✗ {name}: {result['error'][:60]}[/]")
+        else:
+            console.print(Panel(
+                result["content"][:600] + ("..." if len(result["content"]) > 600 else ""),
+                title=f"[{C['model']}]{name}[/] ({result.get('total_tokens', 0)}t)",
+                border_style=C["success"], box=box.ROUNDED,
+            ))
+
 PENTEST = {
     "recon": lambda t: f"Full reconnaissance on {t}. Use bash tools: dig, whatweb, curl, nmap. Check DNS, subdomains, tech stack, ports, directories, JS, CVEs, WAF, origin IP. Execute commands and report findings.",
     "exploit": lambda t: f"Active exploitation on {t}. Use bash tools for curl, python3 exploits. Identify vectors, develop PoC, bypass WAF. Priority: RCE > SQLi > Auth Bypass. Execute and report.",
@@ -1051,6 +1160,10 @@ def dispatch(cmd, args):
     elif cmd == "budget": cmd_budget(args)
     elif cmd == "history": cmd_history()
     elif cmd == "report": cmd_report()
+    elif cmd == "parallel": cmd_parallel(args)
+    elif cmd == "git": cmd_git(args)
+    elif cmd == "review": cmd_review(args)
+    elif cmd == "edit": cmd_edit(args)
     elif cmd == "skill": cmd_skill(args)
     elif cmd == "search": cmd_search(args)
     elif cmd == "web": cmd_web(args)

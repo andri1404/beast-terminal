@@ -272,7 +272,7 @@ print(r.status_code, len(r.text))
 ```bash
 export https_proxy="http://gw.dataimpulse.com:823"
 export http_proxy="http://gw.dataimpulse.com:823"
-# Auth: DATAIMPULSE_USER / DATAIMPULSE_PASS
+# Auth: set DATAIMPULSE_AUTH env var (see .env.example)
 ```
 
 ### Browser Console SQLi (bypass rate limits)
