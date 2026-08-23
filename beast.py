@@ -176,9 +176,28 @@ To search CVEs: sqlite3 ~/.hermes/skills-hub.db "SELECT c.cve_id, c.cvss_score, 
 9. When the task is complete, provide a final summary with all findings.
 
 ## PENTEST TOOLS
-curl, curl_cffi, nmap, sqlmap, whatweb, gobuster, ffuf, dig, host, whois,
-python3, node, jq, sqlite3, git, metasploit, nuclei, searchsploit, proxychains,
-gdown (GDrive), browser (Playwright)"""
+curl, nmap, sqlmap, whatweb, gobuster, ffuf, dig, host, whois, wpscan, nuclei,
+searchsploit, python3, node, jq, sqlite3, git, proxychains, gdown (GDrive)
+
+## CURL_CFFI (TLS Impersonation)
+Use this Python pattern instead of curl when blocked:
+  python3 -c "import curl_cffi.requests as r; resp=r.get('URL',impersonate='safari17_0'); print(resp.status_code,resp.text[:500])"
+Impersonate values: safari17_0, chrome124, edge101, chrome120
+
+## PROXY (DataImpulse)
+When IP blocked: export https_proxy='http://gw.dataimpulse.com:823'
+Auth: DATAIMPULSE_USER / DATAIMPULSE_PASS
+
+## PARALLEL EXECUTION
+Run multiple commands simultaneously with &:
+  curl URL1 & curl URL2 & curl URL3 & wait
+
+## AUTO-SAVE
+After significant findings, save to ~/.beast/reports/ with write tool.
+
+## TIMEOUT HANDLING
+All commands default timeout 30s. Use timeout=N in tool for longer:
+  {"name": "bash", "command": "...", "timeout": 60}"""
 
 # ═══════════════════════════════════════════════════════════════
 # SESSION
@@ -642,6 +661,7 @@ def cmd_help():
         f"[{C['tool']}]  /clear[/]         New session\n"
         f"[{C['tool']}]  /save[/]          Save session\n"
         f"[{C['tool']}]  /export[/]        Export report\n"
+        f"[{C['tool']}]  /report[/]        Auto-save findings\n"
         f"[{C['tool']}]  /status[/]        Session stats\n"
         f"[{C['tool']}]  /probe[/]         Test gateways\n"
         f"[{C['tool']}]  /! <cmd>[/]       Shell command\n"
@@ -717,6 +737,28 @@ def cmd_clear():
 
 def cmd_save(args):
     console.print(f"[{C['success']}]✓ {SESSION.save()}[/]")
+
+def cmd_report():
+    """Auto-generate and save pentest report."""
+    report = SESSION.to_markdown()
+    path = REPORTS_DIR / f"report_{SESSION.id}.md"
+    path.write_text(report)
+    
+    # Also save a summary JSON
+    summary = {
+        "session_id": SESSION.id,
+        "gateway": SESSION.gateway,
+        "tokens": SESSION.tokens,
+        "cost": SESSION.cost,
+        "commands": SESSION.commands[-10:],
+        "duration": str(datetime.now() - SESSION.start),
+        "findings": [],
+    }
+    json_path = REPORTS_DIR / f"summary_{SESSION.id}.json"
+    json_path.write_text(json.dumps(summary, indent=2))
+    
+    console.print(f"[{C['success']}]✓ Report: {path}[/]")
+    console.print(f"[{C['success']}]✓ Summary: {json_path}[/]")
 
 def cmd_export():
     path = REPORTS_DIR / f"report_{SESSION.id}.md"
@@ -866,6 +908,7 @@ def dispatch(cmd, args):
     elif cmd == "cost": cmd_cost()
     elif cmd == "budget": cmd_budget(args)
     elif cmd == "history": cmd_history()
+    elif cmd == "report": cmd_report()
     elif cmd == "probe": cmd_probe()
     elif cmd == "status": cmd_status()
     elif cmd == "clear": cmd_clear()
