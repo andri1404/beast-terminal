@@ -1258,7 +1258,6 @@ def main():
     
     # Interactive mode
     print_banner()
-    console.print(render_status_bar())
     console.print()
     
     history_file = str(BEAST_DIR / "history")
