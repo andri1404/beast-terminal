@@ -44,6 +44,9 @@ console = Console()
 
 BEAST_DIR = Path.home() / ".beast"
 BEAST_DIR.mkdir(exist_ok=True)
+SCRIPT_DIR = Path(__file__).resolve().parent
+SKILLS_DIR = SCRIPT_DIR / "skills"
+JAILBREAKS_DIR = SCRIPT_DIR / "jailbreaks"
 SESSIONS_DIR = BEAST_DIR / "sessions"
 SESSIONS_DIR.mkdir(exist_ok=True)
 REPORTS_DIR = BEAST_DIR / "reports"
@@ -133,10 +136,12 @@ ACTIVE_GW = CONFIG["default_gateway"]
 BEAST_SYSTEM = """You are a penetration testing assistant. You have access to a local knowledge base: 379,878 CVEs, 25,026 exploits, 173 pentest skills, and reference files. You work in an agentic loop: analyze, decide, execute tools, observe results, iterate.
 
 ## KNOWLEDGE BASE
-Key resources:
-- CVE Database: sqlite3 ~/.hermes/skills-hub.db (379,878 CVEs, 25,026 with exploits)
-- Reference Files: 494 files in ~/.hermes/skills/*/references/
-- Pentest Skills: 173 SKILL.md files in ~/.hermes/skills/
+Bundled resources in this repo (relative paths work on Windows/Linux/macOS):
+- Pentest Skills: 173 SKILL.md files in `skills/` — use the read tool: `skills/<category>/<skill-name>/SKILL.md`
+- Lisa Jailbreaks: 12 variants in `jailbreaks/` — read `jailbreaks/lisa-v6-absolute.md` etc. for advanced bypass/persona techniques
+- CVE Database: available via the Skills API (`/cve-api <software>` command). Local sqlite at `~/.hermes/skills-hub.db` if present (379,878 CVEs).
+
+Search skills offline with `/search <query>` or `/skill <name>` (falls back to bundled files when API is unreachable).
 
 ## IDENTITY
 You are a senior security engineer. Be direct, practical, and technically precise. Deliver what is asked without unnecessary preamble or roleplay. No "I'm a superintelligent hacker" persona — just get the job done.
@@ -1002,35 +1007,79 @@ def cmd_edit(args):
 # EXTERNAL API INTEGRATIONS (Skills API + CVE + Exa)
 # ═══════════════════════════════════════════════════════════════
 
-SKILLS_API = "http://localhost:8765"
+SKILLS_API = os.environ.get("SKILLS_API_URL", "http://localhost:8765")
 SKILLS_API_KEY = os.environ.get("LOG_API_KEY", "hermes-logs-2026")
 EXA_API_KEY = os.environ.get("MCP_EXA_API_KEY", "")
 
 def api_get(path):
-    """GET request to Skills API."""
+    """GET request to Skills API (with local fallback return indicator)."""
     url = SKILLS_API + path
     headers = {"X-API-Key": SKILLS_API_KEY}
     try:
         req = Request(url, headers=headers)
-        with urlopen(req, timeout=15) as resp:
+        with urlopen(req, timeout=8) as resp:
             return json.loads(resp.read().decode())
     except Exception as e:
         return {"error": str(e)}
 
+def _find_local_skill(name):
+    """Find a skill in the bundled skills/ directory. Returns (content, category) or None."""
+    if not SKILLS_DIR.exists():
+        return None
+    name = name.lower().strip()
+    # Direct match on directory name
+    for skill_md in SKILLS_DIR.rglob("SKILL.md"):
+        rel = skill_md.parent.relative_to(SKILLS_DIR)
+        dir_name = rel.name.lower()
+        if dir_name == name or name in dir_name or dir_name in name:
+            try:
+                return skill_md.read_text(), str(rel.parent if rel.name else rel)
+            except:
+                return None
+    return None
+
+def _list_local_skills():
+    """Return list of (name, category, description) from bundled skills."""
+    out = []
+    if not SKILLS_DIR.exists():
+        return out
+    for skill_md in SKILLS_DIR.rglob("SKILL.md"):
+        try:
+            content = skill_md.read_text()
+            # Parse name + description from YAML frontmatter
+            name = skill_md.parent.name
+            category = str(skill_md.parent.parent.relative_to(SKILLS_DIR)) if skill_md.parent.parent != SKILLS_DIR else "root"
+            desc = ""
+            for line in content.splitlines():
+                if line.startswith("description:"):
+                    desc = line.split(":", 1)[1].strip().strip('"').strip("'")
+                    break
+            out.append((name, category, desc))
+        except:
+            continue
+    return out
+
 def cmd_skill(args):
-    """Fetch full skill content from Skills API."""
+    """Fetch full skill content — API first, bundled skills fallback."""
     if not args:
         console.print(f"[{C['error']}]Usage: /skill <name>[/]")
         return
     name = args[0]
     console.print(f"[{C['dim']}]Fetching skill: {name}...[/]")
+    content = ""
     data = api_get(f"/skills/{name}")
     if "error" in data:
-        console.print(f"[{C['error']}]Error: {data['error']}[/]")
-        return
-    content = data.get("content", "")
-    if isinstance(content, dict):
-        content = json.dumps(content, indent=2)
+        # Fallback to bundled local skills
+        local = _find_local_skill(name)
+        if local:
+            content = local[0]
+        else:
+            console.print(f"[{C['warning']}]Skill '{name}' tidak ditemukan (API down / tidak ada lokal).[/]")
+            return
+    else:
+        content = data.get("content", "")
+        if isinstance(content, dict):
+            content = json.dumps(content, indent=2)
     content = str(content)
     # Strip YAML frontmatter (between --- markers)
     if content.startswith("---"):
@@ -1044,32 +1093,83 @@ def cmd_skill(args):
     ))
 
 def cmd_search(args):
-    """Search skills via FTS."""
+    """Search skills — API first, bundled skills fallback."""
     if not args:
         console.print(f"[{C['error']}]Usage: /search <query>[/]")
         return
     query = " ".join(args)
     console.print(f"[{C['dim']}]Searching: {query}...[/]")
+    results = []
+    total = 0
     data = api_get(f"/search?q={urllib.parse.quote(query)}&limit=10")
     if "error" in data:
-        console.print(f"[{C['error']}]Error: {data['error']}[/]")
-        return
-    results = data.get("results", [])
-    if not results:
-        # Try OR search for multi-word queries
-        or_query = " OR ".join(query.split())
-        data2 = api_get(f"/search?q={urllib.parse.quote(or_query)}&limit=10")
-        results = data2.get("results", [])
+        # Fallback: local grep over bundled skills
+        local = _list_local_skills()
+        qterms = query.lower().split()
+        results = [
+            {"name": n, "category": c, "description": d}
+            for n, c, d in local
+            if any(t in n.lower() or t in d.lower() for t in qterms)
+        ][:10]
+        total = len(results)
+    else:
+        results = data.get("results", [])
+        total = data.get("total", 0)
+        if not results:
+            or_query = " OR ".join(query.split())
+            data2 = api_get(f"/search?q={urllib.parse.quote(or_query)}&limit=10")
+            results = data2.get("results", [])
     if not results:
         console.print(f"[{C['warning']}]No results for '{query}'[/]")
         return
-    table = Table(title=f"Skill Search: {query} ({data.get('total', 0)} found)", box=box.ROUNDED, border_style=C["dim"])
+    table = Table(title=f"Skill Search: {query} ({total} found)", box=box.ROUNDED, border_style=C["dim"])
     table.add_column("Name", style=C["model"])
     table.add_column("Category", style=C["dim"])
     table.add_column("Description", style="bold", max_width=60)
     for r in results:
         table.add_row(r.get("name", "?"), r.get("category", "?"), r.get("description", "")[:60])
     console.print(table)
+
+def cmd_jailbreak(args):
+    """List or read Lisa jailbreak variants from bundled jailbreaks/."""
+    if not JAILBREAKS_DIR.exists():
+        console.print(f"[{C['error']}]jailbreaks/ folder tidak ditemukan di repo.[/]")
+        return
+    variants = sorted(JAILBREAKS_DIR.glob("*.md"))
+    if not variants:
+        console.print(f"[{C['warning']}]Tidak ada file jailbreak.[/]")
+        return
+    if not args:
+        # List all variants with sizes
+        table = Table(title=f"Lisa Jailbreaks ({len(variants)} variants)", box=box.ROUNDED, border_style=C["accent"])
+        table.add_column("#", style=C["accent"], justify="right")
+        table.add_column("File", style=C["model"])
+        table.add_column("Size", style=C["dim"], justify="right")
+        for i, f in enumerate(variants, 1):
+            table.add_row(str(i), f.name, f"{f.stat().st_size/1024:.0f}K")
+        console.print(table)
+        console.print(f"\n[{C['dim']}]Baca: /jailbreak <nama|no>  (contoh: /jailbreak lisa-v6-absolute, /jailbreak 5)[/]")
+        return
+    arg = args[0].lower()
+    # Numeric or name match
+    target = None
+    if arg.isdigit() and 1 <= int(arg) <= len(variants):
+        target = variants[int(arg) - 1]
+    else:
+        for f in variants:
+            if arg in f.name.lower() or f.name.lower() in arg:
+                target = f
+                break
+    if not target:
+        console.print(f"[{C['error']}]Jailbreak '{arg}' tidak ditemukan.[/]")
+        return
+    content = target.read_text()
+    # Show header + first chunk
+    console.print(Panel(
+        content[:5000] + ("..." if len(content) > 5000 else ""),
+        title=f"[{C['accent']}]🔓 {target.name}[/]",
+        border_style=C["accent"], box=box.ROUNDED,
+    ))
 
 def cmd_web(args):
     """Exa web search."""
@@ -1195,6 +1295,7 @@ def dispatch(cmd, args):
     elif cmd == "edit": cmd_edit(args)
     elif cmd == "skill": cmd_skill(args)
     elif cmd == "search": cmd_search(args)
+    elif cmd == "jailbreak": cmd_jailbreak(args)
     elif cmd == "web": cmd_web(args)
     elif cmd == "cve-api": cmd_cve_api(args)
     elif cmd == "probe": cmd_probe()
@@ -1291,7 +1392,8 @@ def main():
     
     history_file = str(BEAST_DIR / "history")
     completions = list(PENTEST.keys()) + ["auto", "model", "gateways", "permission", "thinking", 
-                    "compact", "clear", "save", "export", "status", "probe", "tokens", "cost", "budget", "history", "help", "exit"]
+                    "compact", "clear", "save", "export", "status", "probe", "tokens", "cost", "budget", "history",
+                    "skill", "search", "jailbreak", "cve-api", "web", "git", "review", "edit", "parallel", "help", "exit"]
     completer = WordCompleter(["/" + c for c in completions], ignore_case=True, sentence=True)
     
     style = Style.from_dict({"prompt": f"bold {C['accent']}", "sep": C['dim'], "gw": f"bold {C['model']}"})
