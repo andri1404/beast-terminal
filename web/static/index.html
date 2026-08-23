@@ -6,6 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d1117">
 <title>BEAST — Agent Workspace</title>
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%230d1117'/%3E%3Ctext x='50%25' y='55%25' font-size='280' text-anchor='middle' dominant-baseline='middle'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
 <style>
 :root {
@@ -160,14 +162,35 @@ body {
 @keyframes spin { to { transform:rotate(360deg); } }
 #connecting p { font-size:13px; color:var(--dim); }
 
+/* ═══ MOBILE KEY BAR ═══ */
+#keybar {
+  display: none;
+  background: var(--bg2); border-top: 1px solid var(--border);
+  padding: 6px 8px; gap: 5px; flex-wrap: wrap;
+  flex-shrink: 0; justify-content: center;
+}
+#keybar button {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  padding: 10px 12px; border-radius: 6px; font-size: 13px; cursor: pointer;
+  font-family: 'SF Mono', Consolas, monospace; min-width: 38px; text-align: center;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+#keybar button:active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+#keybar button.k-wide { min-width: 52px; }
+#keybar button.k-enter { background: #f778ba22; color: var(--accent); border-color: #f778ba44; font-weight: 700; }
+#keybar button.k-danger { color: var(--orange); }
+#keybar .k-spacer { flex: 1; }
+
 /* ═══ RESPONSIVE ═══ */
 @media (max-width:768px) {
   #sidebar { display:none; }
   #model-badge span.m { display:none; }
+  #keybar { display: flex; }
 }
 @media (max-width:480px) {
   #hdr-actions .icon-btn { display:none; }
   #tabs { font-size:11px; }
+  #statusbar { gap: 8px; font-size: 10px; }
 }
 </style>
 </head>
@@ -234,6 +257,21 @@ body {
     <span id="sb-time">0m 0s</span>
     <span>│</span>
     <span id="sb-session">—</span>
+  </div>
+
+  <!-- MOBILE KEY BAR -->
+  <div id="keybar">
+    <button onclick="sendKey('Tab')">Tab</button>
+    <button onclick="sendKey('Escape')">Esc</button>
+    <button onclick="sendKey('CtrlC')" class="k-danger">^C</button>
+    <button onclick="sendKey('CtrlD')" class="k-danger">^D</button>
+    <button onclick="sendKey('/')">/</button>
+    <button onclick="sendKey('ArrowUp')">↑</button>
+    <button onclick="sendKey('ArrowDown')">↓</button>
+    <button onclick="sendKey('ArrowLeft')">←</button>
+    <button onclick="sendKey('ArrowRight')">→</button>
+    <button onclick="sendKey(' ')">␣</button>
+    <button onclick="sendKey('Enter')" class="k-enter k-wide">⏎ Run</button>
   </div>
 </div>
 
@@ -401,6 +439,32 @@ setInterval(() => {
   const s = Math.floor((Date.now() - sessionStart) / 1000);
   el.textContent = Math.floor(s/60) + 'm ' + (s%60) + 's';
 }, 1000);
+
+// ═══ MOBILE KEY INPUT ═══
+const KEYMAP = {
+  'Enter':'\r', 'Tab':'\t', 'Escape':'\x1b',
+  'ArrowUp':'\x1b[A', 'ArrowDown':'\x1b[B',
+  'ArrowLeft':'\x1b[D', 'ArrowRight':'\x1b[C',
+  'CtrlC':'\x03', 'CtrlD':'\x04', ' ':' ',
+};
+function sendKey(key) {
+  const mapped = KEYMAP[key] || key;
+  socket.emit('input', { session_id: sessionId, text: mapped });
+  term.focus();
+}
+
+// ═══ QUICK COMMAND INJECTION (mobile-friendly) ═══
+function sendCmd(cmd) {
+  socket.emit('input', { session_id: sessionId, text: cmd });
+  term.focus();
+}
+
+// ═══ PWA REGISTRATION ═══
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+  });
+}
 
 // ═══ INIT ═══
 switchMode(currentMode);
