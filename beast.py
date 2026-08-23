@@ -673,14 +673,14 @@ def cmd_help():
 
 def cmd_gateways():
     table = Table(box=box.ROUNDED, border_style=C["dim"])
-    table.add_column("", style=C["accent"], width=1)
+    table.add_column("#", style=C["accent"], justify="right")
     table.add_column("ID", style=C["model"]); table.add_column("Gateway", style="bold")
     table.add_column("Model", style=C["dim"]); table.add_column("Status")
-    for gw_id, gw in sorted(GATEWAYS.items(), key=lambda x: x[1].get("priority", 99)):
+    for i, (gw_id, gw) in enumerate(sorted(GATEWAYS.items(), key=lambda x: x[1].get("priority", 99)), 1):
         marker = "▶" if gw_id == ACTIVE_GW else " "
         key = get_api_key(gw_id)
         status = f"[{C['success']}]✓[/]" if key else f"[{C['warning']}]FREE[/]" if gw_id == "blockrun" else f"[{C['error']}]✗[/]"
-        table.add_row(marker, gw_id, gw["name"], gw["model"], status)
+        table.add_row(f"{i}", f"{marker}{gw_id}", gw["name"], gw["model"], status)
     console.print(table)
 
 def cmd_model(args):
@@ -698,27 +698,9 @@ def cmd_model(args):
             console.print(f"[{C['error']}]Unknown: {gw_id}[/]")
             console.print(f"[{C['dim']}]Tersedia: {', '.join(ids)}[/]")
         return
-    # No args → interactive arrow-key selection
-    try:
-        from prompt_toolkit.shortcuts import radiolist_dialog
-        values = [
-            (gw_id, f" {gw['name']:<28} [{gw['model']}]")
-            for gw_id, gw in GATEWAYS.items()
-        ]
-        result = radiolist_dialog(
-            title="Pilih Model",
-            text="Gunakan ↑/↓ lalu Enter untuk pilih (Esc = batal):",
-            values=values,
-        ).run()
-        if result:
-            ACTIVE_GW = result; SESSION.gateway = result
-            console.print(f"[{C['success']}]✓ Model → {GATEWAYS[result]['name']} ({GATEWAYS[result]['model']})[/]")
-        else:
-            console.print(f"[{C['dim']}]Batal.[/]")
-    except Exception:
-        # Fallback: numbered list
-        cmd_gateways()
-        console.print(f"\n[{C['dim']}]Ganti model: /model <id> atau /model <no>  (contoh: /model 2, /model tr-glm)[/]")
+    # No args → simple numbered list
+    cmd_gateways()
+    console.print(f"\n[{C['dim']}]Pilih: /model 1-{len(ids)}  atau /model <id>[/]")
 
 def cmd_permission(args):
     if not args:
