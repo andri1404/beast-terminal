@@ -1204,18 +1204,13 @@ def render_status_bar():
     mins, secs = int(elapsed.total_seconds() // 60), int(elapsed.total_seconds() % 60)
     perm = CONFIG["permission_mode"]
     mode_sym = {"auto": "⏵⏵", "plan": "○", "normal": "⏸"}.get(perm, "⏸")
-    left = Text()
-    left.append(f" {mode_sym} {perm} ", style=C['dim'])
-    left.append(f"· {ACTIVE_GW} ", style=C['model'])
-    if SESSION.budget_limit:
-        pct = SESSION.cost / SESSION.budget_limit * 100
-        left.append(f"· ${SESSION.cost:.4f}/{SESSION.budget_limit:.2f} ", style=C['warning'] if pct > 50 else C['dim'])
-    right = Text()
-    right.append(f"{SESSION.tokens['total']:,} tok ", style=C['token'])
-    right.append(f"· ${SESSION.cost:.4f} ", style=C['success'])
-    right.append(f"· {mins}m {secs}s ", style=C['dim'])
-    layout = Layout(); layout.split_row(Layout(left, ratio=1), Layout(right, ratio=1))
-    return Panel(layout, border_style=C["dim"], box=box.ROUNDED, padding=(0, 1))
+    t = Text()
+    t.append(f" {mode_sym} {perm}", style=C['dim'])
+    t.append(f" · {ACTIVE_GW}", style=C['model'])
+    t.append(f" · {SESSION.tokens['total']:,} tok", style=C['token'])
+    t.append(f" · ${SESSION.cost:.4f}", style=C['success'])
+    t.append(f" · {mins}m {secs}s", style=C['dim'])
+    return Panel(t, border_style=C["dim"], box=box.ROUNDED, padding=(0, 1))
 
 # ═══════════════════════════════════════════════════════════════
 # BANNER
