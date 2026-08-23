@@ -553,6 +553,7 @@ def agentic_loop(user_input):
                             SESSION.add_tokens(
                                 event["data"].get("prompt_tokens", 0),
                                 event["data"].get("completion_tokens", 0),
+                                model=gw.get("model", "unknown"),
                             )
                         elif event["type"] == "done":
                             full_content = event.get("content", full_content)
@@ -565,7 +566,7 @@ def agentic_loop(user_input):
                     if "error" not in result:
                         full_content = result["content"]
                         full_reasoning = result.get("reasoning", "")
-                        SESSION.add_tokens(result.get("prompt_tokens", 0), result.get("completion_tokens", 0))
+                        SESSION.add_tokens(result.get("prompt_tokens", 0), result.get("completion_tokens", 0), model=result.get("model", "unknown"))
         else:
             result = call_api(ACTIVE_GW, api_msgs, system=BEAST_SYSTEM)
             if "error" in result:
@@ -573,7 +574,7 @@ def agentic_loop(user_input):
                 return
             full_content = result["content"]
             full_reasoning = result.get("reasoning", "")
-            SESSION.add_tokens(result.get("prompt_tokens", 0), result.get("completion_tokens", 0))
+            SESSION.add_tokens(result.get("prompt_tokens", 0), result.get("completion_tokens", 0), model=result.get("model", "unknown"))
         
         if not full_content:
             console.print(f"[{C['error']}]Empty response[/]")
@@ -797,6 +798,10 @@ def execute_shell(cmd):
 
 def cmd_tokens():
     """Detailed token breakdown."""
+    if not SESSION.per_model_tokens and SESSION.tokens["total"] == 0:
+        console.print(f"[{C['dim']}]No tokens used yet. Start chatting![/]")
+        return
+    
     table = Table(title="Token Usage", box=box.ROUNDED, border_style=C["dim"])
     table.add_column("Model", style=C["model"])
     table.add_column("Input", style=C["dim"], justify="right")
@@ -827,6 +832,9 @@ def cmd_tokens():
 
 def cmd_cost():
     """Cost breakdown."""
+    if SESSION.tokens["total"] == 0:
+        console.print(f"[{C['dim']}]No cost data yet. Start chatting![/]")
+        return
     elapsed = datetime.now() - SESSION.start
     hours = elapsed.total_seconds() / 3600
     rate = SESSION.cost / max(hours, 0.001)
