@@ -535,7 +535,7 @@ def agentic_loop(user_input):
         
         if gw.get("supports_streaming", True):
             # Show thinking spinner
-            spinner = Spinner("dots", text=f"[dim]BEAST is thinking…[/]", style=C["accent"])
+            spinner = Spinner("dots", text="BEAST is thinking…", style=C["accent"])
             
             with Live(spinner, refresh_per_second=10, console=console, transient=True) as live:
                 try:
@@ -544,11 +544,13 @@ def agentic_loop(user_input):
                             full_reasoning += event["text"]
                             if CONFIG["show_thinking"] and not thinking_shown:
                                 thinking_shown = True
-                                live.update(Text(f"[{C['think']}]✻ {full_reasoning[-200:]}[/]"))
+                                t = Text("✻ ", style=C["think"])
+                                t.append(full_reasoning[-200:])
+                                live.update(t)
                         elif event["type"] == "token":
                             full_content += event["text"]
                             preview = full_content[:60].replace("\n", " ")
-                            live.update(Spinner("dots", text=f"[dim]Generating: {preview}…[/]", style=C["accent"]))
+                            live.update(Spinner("dots", text=f"Generating: {preview}…", style=C["accent"]))
                         elif event["type"] == "usage" and event.get("data"):
                             SESSION.add_tokens(
                                 event["data"].get("prompt_tokens", 0),
