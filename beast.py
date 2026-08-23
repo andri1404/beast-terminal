@@ -519,20 +519,45 @@ def show_tool_panel(tool_name, params, result, status="running"):
 # ═══════════════════════════════════════════════════════════════
 
 def show_network_error(*errs):
-    """Show a clear network/API error with helpful hints."""
+    """Show a clear network/API error with helpful hints (detects error type)."""
     msg = " | ".join(str(e) for e in errs if e)
+    low = msg.lower()
+    if "429" in msg or "too many" in low:
+        title = "⚠ RATE LIMIT"
+        cause = "Lo kena rate limit — kebanyakan request dalam waktu singkat."
+        advice = (
+            "1. Tunggu 30-60 detik terus coba lagi\n"
+            "2. Ganti model: /model tr-glm (GLM-5.2) atau /model blockrun (gratis)\n"
+            "3. Jangan spam /parallel atau /auto berulang-ulang cepat"
+        )
+    elif "10060" in msg or "timed out" in low or "timeout" in low or "winerror" in low:
+        title = "⚠ NETWORK ERROR"
+        cause = "Timeout — koneksi ke API ga nyampe."
+        advice = (
+            "1. Cek internet / firewall blokir Python\n"
+            "2. Perlu VPN/proxy buat reach api.tokenrouter.com\n"
+            "3. Ganti gateway: /model blockrun (gratis)"
+        )
+    elif "401" in msg or "unauthorized" in low:
+        title = "⚠ AUTH ERROR"
+        cause = "API key salah/expired."
+        advice = "Cek HERMES_CUSTOM_API_TOKENROUTER_COM_API_KEY di env."
+    elif "503" in msg or "502" in msg:
+        title = "⚠ API DOWN"
+        cause = "Server API lagi down/maintenance."
+        advice = "Ganti gateway: /model blockrun (Nemotron gratis) atau tunggu."
+    else:
+        title = "⚠ API ERROR"
+        cause = "Gagal konek ke API setelah retry."
+        advice = (
+            "1. /model blockrun (gateway gratis)\n2. /probe (cek semua gateway)\n"
+            "3. Cek internet/firewall"
+        )
     console.print(Panel(
-        f"[{C['error']}]Gagal konek ke API setelah retry.[/]\n"
+        f"[{C['error']}]{cause}[/]\n"
         f"[{C['dim']}]Error: {msg[:200]}[/]\n\n"
-        f"[{C['warning']}]Kemungkinan penyebab:[/]\n"
-        f"1. Internet mati / firewall blokir koneksi Python\n"
-        f"2. API TokenRouter down / rate-limit sementara\n"
-        f"3. Perlu proxy (VPN) buat reach api.tokenrouter.com\n\n"
-        f"[{C['success']}]Coba:[/]\n"
-        f"=> /model blockrun (gateway lain, gratis)\n"
-        f"=> /probe (cek status semua gateway)\n"
-        f"=> cek koneksi: python3 -c \"import urllib.request; urllib.request.urlopen('https://api.tokenrouter.com', timeout=10)\"",
-        title=f"[{C['error']}]⚠ NETWORK ERROR[/]",
+        f"[{C['success']}]Solusi:[/]\n{advice}",
+        title=f"[{C['error']}]{title}[/]",
         border_style=C["error"], box=box.ROUNDED,
     ))
 
