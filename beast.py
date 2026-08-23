@@ -47,6 +47,7 @@ BEAST_DIR.mkdir(exist_ok=True)
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILLS_DIR = SCRIPT_DIR / "skills"
 JAILBREAKS_DIR = SCRIPT_DIR / "jailbreaks"
+CVE_DB = SCRIPT_DIR / "cve.db"
 SESSIONS_DIR = BEAST_DIR / "sessions"
 SESSIONS_DIR.mkdir(exist_ok=True)
 REPORTS_DIR = BEAST_DIR / "reports"
@@ -1206,30 +1207,60 @@ def cmd_web(args):
         table.add_row(str(i+1), r.get("title", "?")[:40], r.get("url", "?")[:50])
     console.print(table)
 
+def _search_local_cve(query, limit=10):
+    """Search bundled cve.db (25,026 exploit-ready CVEs) via FTS. Returns list of dicts."""
+    if not CVE_DB.exists():
+        return []
+    try:
+        import sqlite3
+        conn = sqlite3.connect(str(CVE_DB))
+        # FTS query — join back to cves for details
+        terms = " AND ".join(f'"{t}"' if " " in t else t for t in query.split())
+        rows = conn.execute(
+            "SELECT c.cve_id, c.cvss_score, c.cvss_severity, c.description, c.exploit_count "
+            "FROM cves_fts f JOIN cves c ON f.cve_id=c.cve_id "
+            f"WHERE cves_fts MATCH ? ORDER BY c.cvss_score DESC LIMIT {limit}",
+            (terms,)
+        ).fetchall()
+        conn.close()
+        return [{"cve_id": r[0], "cvss_score": r[1], "cvss_severity": r[2], "description": r[3], "exploit_count": r[4]} for r in rows]
+    except Exception:
+        return []
+
 def cmd_cve_api(args):
-    """Enhanced CVE search via Skills API."""
+    """CVE search — local bundled cve.db first, Skills API fallback."""
     if not args:
-        console.print(f"[{C['error']}]Usage: /cve-api <query>[/]")
+        console.print(f"[{C['error']}]Usage: /cve <query>[/]")
         return
     query = " ".join(args)
     console.print(f"[{C['dim']}]Searching CVEs: {query}...[/]")
-    data = api_get(f"/cve/search?q={urllib.parse.quote(query)}&limit=10")
-    if "error" in data:
-        console.print(f"[{C['error']}]Error: {data['error']}[/]")
-        return
-    results = data.get("results", [])
+    # Try local bundled DB first
+    results = _search_local_cve(query)
+    total = len(results)
+    source = "local cve.db (exploit-ready)"
+    if not results:
+        # Fallback to API
+        data = api_get(f"/cve/search?q={urllib.parse.quote(query)}&limit=10")
+        if "error" in data:
+            console.print(f"[{C['warning']}]No local CVE match & API unreachable. Run /sync-cve untuk download full DB.[/]")
+            return
+        results = data.get("results", [])
+        total = data.get("total", 0)
+        source = "Skills API"
     if not results:
         console.print(f"[{C['warning']}]No CVEs for '{query}'[/]")
         return
-    table = Table(title=f"CVE Search: {query} ({data.get('total', 0)} found)", box=box.ROUNDED, border_style=C["dim"])
+    table = Table(title=f"CVE Search: {query} ({total} found · {source})", box=box.ROUNDED, border_style=C["dim"])
     table.add_column("CVE", style=C["model"])
     table.add_column("CVSS", style=C["warning"], justify="right")
     table.add_column("Severity", style="bold")
-    table.add_column("Description", max_width=60)
-    for c in results:
+    table.add_column("Exploit", style=C["success"], justify="center")
+    table.add_column("Description", max_width=55)
+    for c in results[:10]:
         sev = c.get("cvss_severity", "?")
         sev_color = C["error"] if sev == "CRITICAL" else C["warning"] if sev == "HIGH" else C["dim"]
-        table.add_row(c.get("cve_id", "?"), str(c.get("cvss_score", "?")), f"[{sev_color}]{sev}[/]", c.get("description", "")[:60])
+        exploit = f"[{C['success']}]🔓[/]" if c.get("exploit_count", 0) > 0 else ""
+        table.add_row(c.get("cve_id", "?"), str(c.get("cvss_score", "?")), f"[{sev_color}]{sev}[/]", exploit, c.get("description", "")[:55])
     console.print(table)
 
 # PENTEST PROMPTS
@@ -1270,7 +1301,7 @@ def cmd_parallel(args):
 PENTEST = {
     "recon": lambda t: f"Full reconnaissance on {t}. Use bash tools: dig, whatweb, curl, nmap. Check DNS, subdomains, tech stack, ports, directories, JS, CVEs, WAF, origin IP. Execute commands and report findings.",
     "exploit": lambda t: f"Active exploitation on {t}. Use bash tools for curl, python3 exploits. Identify vectors, develop PoC, bypass WAF. Priority: RCE > SQLi > Auth Bypass. Execute and report.",
-    "cve": lambda t: f"Search CVEs for {t}. Use bash: sqlite3 ~/.hermes/skills-hub.db. Get details, public exploits, exploitation steps, WAF bypass. Execute commands.",
+    "cve": lambda t: f"Search CVEs for {t}. The bundled cve.db has 25k exploit-ready CVEs. Use bash: python3 -c \"import sqlite3;c=sqlite3.connect('cve.db');[print(r[0],r[1],r[2],r[3][:100])for r in c.execute(\\\"SELECT c.cve_id,c.cvss_score,c.cvss_severity,c.description FROM cves_fts f JOIN cves c ON f.cve_id=c.cve_id WHERE cves_fts MATCH '{t}' ORDER BY c.cvss_score DESC LIMIT 10\\\")]\". Get details, public exploits, exploitation steps, WAF bypass.",
     "bypass": lambda t: f"Bypass WAF/CDN on {t}. Use bash tools: curl_cffi, dig, curl. Try origin IP, TLS impersonation, smuggling, encoding. Execute each technique.",
     "chain": lambda t: f"Full attack chain on {t}. Phase 1: Recon. Phase 2: Vuln. Phase 3: Exploit. Phase 4: Priv Esc. Phase 5: Report. Use tools for each phase.",
     "sqlmap": lambda t: f"Automated SQLi on {t}. Use bash: sqlmap with all flags. Execute and report.",
@@ -1297,7 +1328,7 @@ def dispatch(cmd, args):
     elif cmd == "search": cmd_search(args)
     elif cmd == "jailbreak": cmd_jailbreak(args)
     elif cmd == "web": cmd_web(args)
-    elif cmd == "cve-api": cmd_cve_api(args)
+    elif cmd in ("cve", "cve-api"): cmd_cve_api(args)
     elif cmd == "probe": cmd_probe()
     elif cmd == "status": cmd_status()
     elif cmd == "clear": cmd_clear()
