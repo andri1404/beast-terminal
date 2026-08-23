@@ -147,6 +147,14 @@ body {
     <button class="chip" onclick="quick('/help')">❓ Help</button>
   </div>
 
+  <!-- MODEL SELECTOR -->
+  <div id="chips" style="border-bottom:1px solid var(--border);">
+    <button class="chip" id="m-tr" onclick="switchModel('tr')">DeepSeek V4 Pro</button>
+    <button class="chip" id="m-tr-glm" onclick="switchModel('tr-glm')">GLM-5.2</button>
+    <button class="chip" id="m-tr-free" onclick="switchModel('tr-free')">DS Free</button>
+    <button class="chip" id="m-blockrun" onclick="switchModel('blockrun')">Nemotron 120B</button>
+  </div>
+
   <!-- OUTPUT -->
   <div id="output">
     <div id="empty">
@@ -234,6 +242,18 @@ function addCmdLine(txt) {
 function quick(cmd) {
   const inp = document.getElementById('input');
   inp.value = cmd; inp.focus();
+}
+let activeModel = 'tr';
+function switchModel(id) {
+  activeModel = id;
+  // highlight active chip
+  document.querySelectorAll('#chips .chip').forEach(c => {
+    if (c.id && c.id.startsWith('m-')) {
+      c.style.background = (c.id === 'm-' + id) ? 'var(--accent)' : '';
+      c.style.color = (c.id === 'm-' + id) ? 'var(--bg)' : '';
+    }
+  });
+  socket.emit('input', { session_id:sessionId, text: '/model ' + id + '\r' });
 }
 function sendKey(k) {
   socket.emit('input', { session_id:sessionId, text: KEYMAP[k]||k });

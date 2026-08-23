@@ -686,14 +686,16 @@ def cmd_gateways():
 def cmd_model(args):
     global ACTIVE_GW
     if not args:
-        console.print(f"[{C['model']}]Current: {GATEWAYS[ACTIVE_GW]['name']}[/]")
+        cmd_gateways()
+        console.print(f"\n[{C['dim']}]Ganti model: /model <id>  (contoh: /model tr-glm, /model blockrun)[/]")
         return
     gw_id = args[0].lower()
     if gw_id in GATEWAYS:
         ACTIVE_GW = gw_id; SESSION.gateway = gw_id
-        console.print(f"[{C['success']}]✓ {GATEWAYS[gw_id]['name']}[/]")
+        console.print(f"[{C['success']}]✓ Model → {GATEWAYS[gw_id]['name']} ({GATEWAYS[gw_id]['model']})[/]")
     else:
         console.print(f"[{C['error']}]Unknown: {gw_id}[/]")
+        console.print(f"[{C['dim']}]Tersedia: {', '.join(GATEWAYS.keys())}[/]")
 
 def cmd_permission(args):
     if not args:
