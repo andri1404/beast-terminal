@@ -72,6 +72,7 @@ def create_tmux_session(session_id, mode="pentest"):
         "window_id": window_id,
         "pane_pid": pane_pid,
         "created": datetime.now(),
+        "last_pos": 0,
     }
     
     return session_name, None
@@ -135,6 +136,7 @@ def handle_connect():
     # Send initial tmux output
     output = capture_tmux(session_id)
     if output:
+        TMUX_SESSIONS[session_id]["last_pos"] = len(output)
         emit("output", {"data": output})
 
 @socketio.on("input")
@@ -143,10 +145,17 @@ def handle_input(data):
     text = data.get("text", "")
     if session_id in TMUX_SESSIONS:
         send_to_tmux(session_id, text)
-        time.sleep(0.2)
-        # Send updated output
+        time.sleep(0.3)
+        # Send only NEW output since last position
         output = capture_tmux(session_id)
-        emit("output", {"data": output})
+        last = TMUX_SESSIONS[session_id].get("last_pos", 0)
+        if len(output) > last:
+            delta = output[last:]
+            TMUX_SESSIONS[session_id]["last_pos"] = len(output)
+            emit("output", {"data": delta})
+        else:
+            # Pane may have reset — resync
+            TMUX_SESSIONS[session_id]["last_pos"] = 0
 
 @socketio.on("resize")
 def handle_resize(data):
