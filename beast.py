@@ -381,7 +381,7 @@ def execute_tool(tool_name, params):
         if tool_name == "bash":
             cmd = params.get("command", "")
             timeout = params.get("timeout", 30)
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout, encoding="utf-8", errors="replace")
             output = (result.stdout or "") + (result.stderr or "")
             return {
                 "exit_code": result.returncode,
@@ -801,7 +801,7 @@ def cmd_probe():
 def execute_shell(cmd):
     console.print(f"\n[{C['tool']}]$ {cmd}[/]")
     try:
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
         if r.stdout.strip() or r.stderr.strip():
             console.print(Panel(
                 Syntax((r.stdout + r.stderr).strip(), "bash", theme="monokai"),
@@ -986,7 +986,7 @@ def cmd_review(args):
     else:
         # Review git diff
         import subprocess
-        diff = subprocess.run("git diff HEAD 2>/dev/null | head -300", shell=True, capture_output=True, text=True).stdout
+        diff = subprocess.run("git diff HEAD 2>/dev/null | head -300", shell=True, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
         if not diff.strip():
             console.print(f"[{C['warning']}]No git diff. Use /review <file> to review a specific file.[/]")
             return
