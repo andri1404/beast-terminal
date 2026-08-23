@@ -1,0 +1,20 @@
+[Unit]
+Description=BEAST Terminal Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/pentest-cli
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/ubuntu/.local/bin
+Environment=PORT=5000
+Environment=HOST=0.0.0.0
+Environment=HERMES_CUSTOM_API_TOKENROUTER_COM_API_KEY=%TOKENROUTER_KEY%
+ExecStart=/usr/bin/python3 /home/ubuntu/pentest-cli/web/server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

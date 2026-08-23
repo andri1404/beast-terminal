@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BEAST Terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0f;
+  height: 100vh;
+  overflow: hidden;
+  font-family: monospace;
+}
+#header {
+  background: #111118;
+  border-bottom: 2px solid #FF6B35;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+}
+#header .logo {
+  color: #FF6B35;
+  font-weight: bold;
+  font-size: 14px;
+}
+#header .info {
+  color: #757575;
+  font-size: 12px;
+}
+#header .info span {
+  color: #E040FB;
+}
+#header .actions button {
+  background: #1a1a2e;
+  color: #00BCD4;
+  border: 1px solid #2a2a3a;
+  padding: 4px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  margin-left: 8px;
+}
+#header .actions button:hover {
+  background: #FF6B35;
+  color: #fff;
+  border-color: #FF6B35;
+}
+#terminal {
+  height: calc(100vh - 40px);
+  padding: 4px;
+}
+.connecting {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+  color: #FF6B35;
+  font-size: 18px;
+  text-align: center;
+}
+.connecting .spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #333;
+  border-top: 2px solid #FF6B35;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="header">
+  <div class="logo">🔥 BEAST Terminal</div>
+  <div class="info">Session: <span id="session-id">connecting...</span></div>
+  <div class="actions">
+    <button onclick="newSession()">New Session</button>
+    <button onclick="killSession()">Kill</button>
+    <button onclick="toggleFullscreen()">⛶</button>
+  </div>
+</div>
+<div id="terminal"></div>
+<div class="connecting" id="connecting">
+  <div class="spinner"></div> Connecting to BEAST...
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.4/dist/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+// TERMINAL SETUP
+// ═══════════════════════════════════════════════
+
+const term = new Terminal({
+  cursorBlink: true,
+  fontSize: 13,
+  fontFamily: "'Courier New', 'DejaVu Sans Mono', monospace",
+  theme: {
+    background: '#0a0a0f',
+    foreground: '#c0c0c0',
+    cursor: '#FF6B35',
+    cursorAccent: '#0a0a0f',
+    selectionBackground: '#FF6B3533',
+    black: '#1a1a2e',
+    red: '#FF1744',
+    green: '#00C853',
+    yellow: '#FFD600',
+    blue: '#448AFF',
+    magenta: '#E040FB',
+    cyan: '#00BCD4',
+    white: '#e0e0e0',
+    brightBlack: '#757575',
+    brightRed: '#FF5252',
+    brightGreen: '#69F0AE',
+    brightYellow: '#FFFF00',
+    brightBlue: '#82B1FF',
+    brightMagenta: '#EA80FC',
+    brightCyan: '#84FFFF',
+    brightWhite: '#ffffff',
+  },
+  allowProposedApi: true,
+  scrollback: 10000,
+});
+
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.open(document.getElementById('terminal'));
+fitAddon.fit();
+
+window.addEventListener('resize', () => fitAddon.fit());
+
+// ═══════════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════════
+
+let sessionId = localStorage.getItem('beast_session') || '';
+const socket = io({
+  query: { session_id: sessionId },
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionDelay: 1000,
+  reconnectionAttempts: Infinity,
+});
+
+socket.on('connect', () => {
+  document.getElementById('connecting').style.display = 'none';
+});
+
+socket.on('connected', (data) => {
+  sessionId = data.session_id;
+  localStorage.setItem('beast_session', sessionId);
+  document.getElementById('session-id').textContent = data.session_name;
+  term.clear();
+  term.write(data.message + '\r\n\r\n');
+});
+
+socket.on('output', (data) => {
+  if (data.data) {
+    term.clear();
+    term.write(data.data.replace(/\n/g, '\r\n'));
+  }
+});
+
+socket.on('error', (data) => {
+  term.write('\r\n\x1b[31m[ERROR] ' + data.message + '\x1b[0m\r\n');
+});
+
+socket.on('killed', (data) => {
+  term.write('\r\n\x1b[33m' + data.message + '\x1b[0m\r\n');
+});
+
+socket.on('disconnect', () => {
+  document.getElementById('connecting').style.display = 'block';
+  document.getElementById('connecting').innerHTML = 
+    '<div class="spinner"></div> Reconnecting... (session preserved)';
+});
+
+// ═══════════════════════════════════════════════
+// INPUT
+// ═══════════════════════════════════════════════
+
+term.onData((data) => {
+  socket.emit('input', { session_id: sessionId, text: data });
+});
+
+// ═══════════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════════
+
+function newSession() {
+  localStorage.removeItem('beast_session');
+  location.reload();
+}
+
+function killSession() {
+  if (confirm('Kill this session?')) {
+    socket.emit('kill_session', { session_id: sessionId });
+    localStorage.removeItem('beast_session');
+    setTimeout(() => location.reload(), 1000);
+  }
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+// Handle paste
+term.onPaste = (text) => {
+  socket.emit('input', { session_id: sessionId, text: text });
+};
+</script>
+</body>
+</html>
