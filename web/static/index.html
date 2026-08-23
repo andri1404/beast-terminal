@@ -4,500 +4,406 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0a0a0f">
-<title>BEAST Terminal</title>
+<meta name="theme-color" content="#0d1117">
+<title>BEAST — Agent Workspace</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --bg: #0a0a0f;
-  --header-bg: #111118;
-  --accent: #FF6B35;
-  --accent2: #00C853;
-  --border: #2a2a3a;
-  --text: #c0c0c0;
-  --dim: #757575;
-  --font: 'Courier New', 'DejaVu Sans Mono', 'SF Mono', monospace;
-  --header-h: 44px;
-  --toolbar-h: 38px;
-  --font-size: 13px;
+  --bg: #0d1117;
+  --bg2: #161b22;
+  --bg3: #1c2128;
+  --border: #30363d;
+  --border2: #21262d;
+  --text: #e6edf3;
+  --dim: #8b949e;
+  --accent: #f778ba;      /* pink (Claude-ish) */
+  --accent2: #d2a8ff;     /* purple */
+  --green: #3fb950;
+  --orange: #ff7b72;
+  --cyan: #79c0ff;
+  --yellow: #d29922;
 }
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; }
 body {
   background: var(--bg);
-  height: 100vh; height: 100dvh;
-  overflow: hidden;
-  font-family: var(--font);
-  -webkit-tap-highlight-color: transparent;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* ── HEADER ── */
-#header {
-  background: var(--header-bg);
-  border-bottom: 2px solid var(--accent);
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: var(--header-h);
-  gap: 8px;
-}
-#header .logo {
-  color: var(--accent);
-  font-weight: bold;
-  font-size: 14px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-#header .mode-badge {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-.mode-badge.pentest { background: #FF6B3522; color: var(--accent); border: 1px solid #FF6B3544; }
-.mode-badge.coding { background: #448AFF22; color: #448AFF; border: 1px solid #448AFF44; }
-.mode-badge.general { background: #E040FB22; color: #E040FB; border: 1px solid #E040FB44; }
-
-#header .info {
-  color: var(--dim);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  text-align: center;
-  min-width: 0;
-}
-#header .info span { color: #E040FB; }
-
-/* ── TOOLBAR ── */
-#toolbar {
-  background: #0d0d14;
-  border-bottom: 1px solid var(--border);
-  padding: 0 8px;
-  display: flex;
-  align-items: center;
-  height: var(--toolbar-h);
-  gap: 4px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-#toolbar button {
-  background: #1a1a2e;
-  color: #00BCD4;
-  border: 1px solid var(--border);
-  padding: 3px 10px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 11px;
-  font-family: var(--font);
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: all 0.15s;
-}
-#toolbar button:hover, #toolbar button.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-#toolbar button.mode-btn {
-  background: #1a1a2e;
-  color: var(--dim);
-  font-weight: bold;
-}
-#toolbar button.mode-btn.active {
-  background: var(--accent);
-  color: #fff;
-}
-#toolbar .sep {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-  margin: 0 4px;
-  flex-shrink: 0;
-}
-#toolbar button.quick-cmd {
-  font-size: 10px;
-  padding: 2px 8px;
-}
-
-/* ── TERMINAL ── */
-#terminal-wrapper {
-  height: calc(100vh - var(--header-h) - var(--toolbar-h));
-  height: calc(100dvh - var(--header-h) - var(--toolbar-h));
-  padding: 2px;
-}
-#terminal {
-  height: 100%;
-}
-
-/* ── MOBILE KEYBOARD BAR ── */
-#mobile-bar {
-  display: none;
-  background: #111118;
-  border-top: 1px solid var(--border);
-  padding: 4px 8px;
-  gap: 4px;
-  flex-wrap: wrap;
-  height: auto;
-}
-#mobile-bar button {
-  background: #1a1a2e;
   color: var(--text);
-  border: 1px solid var(--border);
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-family: var(--font);
-  cursor: pointer;
-  min-width: 28px;
-  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
-#mobile-bar button:active { background: var(--accent); color: #fff; }
-#mobile-bar button.tab { min-width: 40px; }
-#mobile-bar button.enter { min-width: 50px; background: #FF6B3533; color: var(--accent); }
+.mono { font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace; }
 
-.connecting {
-  position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-  color: var(--accent); font-size: 16px; text-align: center; z-index: 100;
-  background: #0a0a0fee; padding: 20px 30px; border-radius: 8px;
-}
-.connecting .spinner {
-  display: inline-block; width: 18px; height: 18px;
-  border: 2px solid #333; border-top: 2px solid var(--accent);
-  border-radius: 50%; animation: spin 1s linear infinite;
-  margin-right: 8px; vertical-align: middle;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+/* ═══ APP SHELL ═══ */
+#app { display:flex; flex-direction:column; height:100vh; height:100dvh; }
 
-/* ── RESPONSIVE ── */
-@media (max-width: 768px) {
-  :root { --font-size: 11px; --header-h: 40px; --toolbar-h: 34px; }
-  #header .logo { font-size: 12px; }
-  #header .info { display: none; }
-  #header .mode-badge { font-size: 9px; padding: 1px 6px; }
-  #toolbar button { font-size: 10px; padding: 2px 7px; }
-  #toolbar button.quick-cmd { display: none; }
-  #mobile-bar { display: flex; }
-  #terminal-wrapper { height: calc(100dvh - var(--header-h) - var(--toolbar-h) - 50px); }
+/* ═══ HEADER ═══ */
+#header {
+  display:flex; align-items:center; gap:12px;
+  padding:10px 16px;
+  background: var(--bg2);
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+  min-height:52px;
 }
-
-@media (max-width: 480px) {
-  :root { --font-size: 10px; --header-h: 36px; --toolbar-h: 0px; }
-  #toolbar { display: none; }
-  #header .actions button { font-size: 9px; padding: 2px 6px; }
-  #terminal-wrapper { height: calc(100dvh - var(--header-h) - 70px); }
+#logo { display:flex; align-items:center; gap:10px; }
+#logo .lg { font-size:18px; font-weight:800; letter-spacing:-0.5px; }
+#logo .lg .a { color: var(--accent); }
+#logo .lg .b { color: var(--text); }
+#logo .ver { font-size:10px; color: var(--dim); background:var(--bg3); padding:2px 6px; border-radius:10px; }
+#conn { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim); }
+#conn .dot { width:8px; height:8px; border-radius:50%; background:var(--yellow); }
+#conn .dot.on { background: var(--green); box-shadow:0 0 6px var(--green); }
+#spacer { flex:1; }
+#model-badge {
+  display:flex; align-items:center; gap:6px;
+  font-size:11px; color:var(--text);
+  background:var(--bg3); border:1px solid var(--border);
+  padding:5px 10px; border-radius:6px; cursor:pointer;
 }
+#model-badge:hover { border-color:var(--accent); }
+#hdr-actions { display:flex; gap:6px; }
+.icon-btn {
+  background:var(--bg3); border:1px solid var(--border); color:var(--text);
+  padding:5px 10px; border-radius:6px; cursor:pointer; font-size:12px;
+  white-space:nowrap;
+}
+.icon-btn:hover { border-color:var(--accent); color:var(--accent); }
 
-@media (min-width: 1400px) {
-  :root { --font-size: 14px; }
+/* ═══ MAIN AREA (sidebar + terminal) ═══ */
+#main { display:flex; flex:1; min-height:0; }
+
+/* ═══ SIDEBAR (sessions) ═══ */
+#sidebar {
+  width:220px; background:var(--bg2); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; flex-shrink:0;
+}
+#sidebar-head {
+  padding:12px 14px 8px; font-size:11px; font-weight:700;
+  color:var(--dim); text-transform:uppercase; letter-spacing:0.5px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+#sidebar-head .add {
+  background:var(--bg3); border:1px solid var(--border); color:var(--text);
+  width:24px; height:24px; border-radius:5px; cursor:pointer; font-size:15px;
+}
+#sidebar-head .add:hover { border-color:var(--accent); color:var(--accent); }
+#sessions { flex:1; overflow-y:auto; padding:4px 8px; }
+.session {
+  display:flex; align-items:center; gap:8px;
+  padding:9px 10px; margin:2px 0; border-radius:6px; cursor:pointer;
+  font-size:12px; color:var(--dim); border:1px solid transparent;
+}
+.session:hover { background:var(--bg3); }
+.session.active { background:var(--bg3); border-color:var(--border); color:var(--text); }
+.session .s-dot { width:7px; height:7px; border-radius:50%; background:var(--yellow); flex-shrink:0; }
+.session .s-dot.busy { background:var(--orange); animation:pulse 1s infinite; }
+.session .s-dot.idle { background:var(--green); }
+.session .s-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:'SF Mono',Consolas,monospace; }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+/* ═══ TERMINAL PANEL ═══ */
+#term-panel { flex:1; display:flex; flex-direction:column; min-width:0; }
+#tabs { display:flex; background:var(--bg2); border-bottom:1px solid var(--border); overflow-x:auto; flex-shrink:0; }
+.tab {
+  display:flex; align-items:center; gap:6px; padding:8px 14px;
+  font-size:12px; color:var(--dim); border-right:1px solid var(--border2);
+  cursor:pointer; white-space:nowrap;
+}
+.tab.active { color:var(--text); background:var(--bg); border-top:2px solid var(--accent); }
+.tab .t-close { color:var(--dim); font-size:14px; }
+.tab .t-close:hover { color:var(--orange); }
+#tab-add { padding:8px 12px; color:var(--dim); cursor:pointer; }
+#tab-add:hover { color:var(--accent); }
+
+#term-wrap { flex:1; position:relative; min-height:0; }
+#terminal { position:absolute; inset:0; padding:8px; }
+#md-view { position:absolute; inset:0; padding:16px 20px; overflow-y:auto; display:none; background:var(--bg); }
+#md-view pre { background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:12px; overflow-x:auto; }
+#md-view code { font-family:'SF Mono',Consolas,monospace; font-size:12px; color:var(--cyan); }
+#md-view h1,#md-view h2,#md-view h3 { margin:14px 0 6px; }
+#md-view p { margin:6px 0; line-height:1.5; }
+#md-view ul,#md-view ol { margin:6px 0 6px 20px; }
+#md-view table { border-collapse:collapse; width:100%; margin:10px 0; }
+#md-view th,#md-view td { border:1px solid var(--border); padding:6px 10px; text-align:left; font-size:12px; }
+#md-view th { background:var(--bg3); }
+#md-view a { color:var(--cyan); }
+
+/* ═══ VIEW TOGGLE ═══ */
+#view-toggle { display:flex; gap:4px; background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:2px; }
+#view-toggle button { background:transparent; border:none; color:var(--dim); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; }
+#view-toggle button.active { background:var(--bg); color:var(--text); }
+
+/* ═══ STATUS BAR ═══ */
+#statusbar {
+  display:flex; align-items:center; gap:14px;
+  padding:6px 14px; font-size:11px; color:var(--dim);
+  background:var(--bg2); border-top:1px solid var(--border);
+  flex-shrink:0; overflow-x:auto; white-space:nowrap;
+}
+#statusbar .s-model { color:var(--accent2); font-weight:600; }
+#statusbar .s-tok { color:var(--green); }
+#statusbar .s-cost { color:var(--yellow); }
+#statusbar .spacer { flex:1; }
+
+/* ═══ CONNECTING ═══ */
+#connecting {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:var(--bg3); border:1px solid var(--border); border-radius:10px;
+  padding:24px 30px; z-index:200; text-align:center;
+}
+#connecting .spin {
+  width:28px; height:28px; border:3px solid var(--border);
+  border-top-color:var(--accent); border-radius:50%; margin:0 auto 12px;
+  animation:spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+#connecting p { font-size:13px; color:var(--dim); }
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width:768px) {
+  #sidebar { display:none; }
+  #model-badge span.m { display:none; }
+}
+@media (max-width:480px) {
+  #hdr-actions .icon-btn { display:none; }
+  #tabs { font-size:11px; }
 }
 </style>
 </head>
 <body>
+<div id="app">
 
-<!-- HEADER -->
-<div id="header">
-  <div class="logo">🔥 BEAST</div>
-  <div class="mode-badge pentest" id="mode-badge">PENTEST</div>
-  <div class="info">Session: <span id="session-id">connecting...</span></div>
-  <div class="actions" id="header-actions">
-    <button onclick="switchMode('pentest')" title="Pentest Mode">P</button>
-    <button onclick="switchMode('coding')" title="Coding Mode">C</button>
-    <button onclick="switchMode('general')" title="General Mode">G</button>
-    <button onclick="newSession()">+</button>
-    <button onclick="toggleFullscreen()">⛶</button>
+  <!-- HEADER -->
+  <div id="header">
+    <div id="logo">
+      <span class="lg"><span class="a">🔥</span> BEAST<span class="b"> Terminal</span></span>
+      <span class="ver">v5.5</span>
+    </div>
+    <div id="conn"><span class="dot" id="conn-dot"></span><span id="conn-txt">connecting…</span></div>
+    <div id="spacer"></div>
+    <div id="model-badge" onclick="switchMode(currentMode)" title="Click to switch mode">
+      <span id="mode-emoji">🔥</span><span class="m" id="model-name">Pentest</span>
+    </div>
+    <div id="hdr-actions">
+      <button class="icon-btn" onclick="toggleView()" title="Toggle terminal/markdown">📝 Markdown</button>
+      <button class="icon-btn" onclick="newSession()" title="New session">+ New</button>
+      <button class="icon-btn" onclick="killSession()" title="Kill current session">⏹</button>
+      <button class="icon-btn" onclick="toggleFullscreen()" title="Fullscreen">⛶</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div id="sidebar-head">
+        <span>AGENT SESSIONS</span>
+        <button class="add" onclick="newSession()">+</button>
+      </div>
+      <div id="sessions"></div>
+    </div>
+
+    <!-- TERMINAL PANEL -->
+    <div id="term-panel">
+      <div id="tabs">
+        <div class="tab active" id="tab-main"><span id="tab-name">terminal</span><span class="t-close" onclick="killSession()">×</span></div>
+        <span id="tab-add" onclick="newSession()">+</span>
+        <div style="flex:1"></div>
+        <div id="view-toggle">
+          <button id="vt-term" class="active" onclick="setView('term')">&gt;_ Terminal</button>
+          <button id="vt-md" onclick="setView('md')">Markdown</button>
+        </div>
+      </div>
+      <div id="term-wrap">
+        <div id="terminal"></div>
+        <div id="md-view"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div id="statusbar">
+    <span class="s-model" id="sb-model">—</span>
+    <span>│</span>
+    <span id="sb-mode">mode: —</span>
+    <span>│</span>
+    <span class="s-tok" id="sb-tokens">0 tok</span>
+    <span class="s-cost" id="sb-cost">$0.0000</span>
+    <span class="spacer"></span>
+    <span id="sb-time">0m 0s</span>
+    <span>│</span>
+    <span id="sb-session">—</span>
   </div>
 </div>
 
-<!-- TOOLBAR -->
-<div id="toolbar">
-  <button class="mode-btn active" data-mode="pentest" onclick="switchMode('pentest')">🔥 Pentest</button>
-  <button class="mode-btn" data-mode="coding" onclick="switchMode('coding')">💻 Coding</button>
-  <button class="mode-btn" data-mode="general" onclick="switchMode('general')">🧠 General</button>
-  <span class="sep"></span>
-  <button onclick="sendCmd('/recon ')">/recon</button>
-  <button onclick="sendCmd('/exploit ')">/exploit</button>
-  <button onclick="sendCmd('/cve ')">/cve</button>
-  <button onclick="sendCmd('/chain ')">/chain</button>
-  <button onclick="sendCmd('/auto ')">/auto</button>
-  <span class="sep"></span>
-  <button class="quick-cmd" onclick="sendCmd('/gateways')">gateways</button>
-  <button class="quick-cmd" onclick="sendCmd('/tokens')">tokens</button>
-  <button class="quick-cmd" onclick="sendCmd('/cost')">cost</button>
-  <button class="quick-cmd" onclick="sendCmd('/status')">status</button>
-  <button class="quick-cmd" onclick="sendCmd('/help')">help</button>
-</div>
-
-<!-- TERMINAL -->
-<div id="terminal-wrapper"><div id="terminal"></div></div>
-
-<!-- MOBILE BAR -->
-<div id="mobile-bar">
-  <button onclick="sendKey('Tab')" class="tab">Tab</button>
-  <button onclick="sendKey('Escape')">Esc</button>
-  <button onclick="sendKey('/')">/</button>
-  <button onclick="sendKey('ArrowUp')">↑</button>
-  <button onclick="sendKey('ArrowDown')">↓</button>
-  <button onclick="sendKey('ArrowLeft')">←</button>
-  <button onclick="sendKey('ArrowRight')">→</button>
-  <button onclick="sendKey('Enter')" class="enter">↵</button>
-  <button onclick="sendKey('CtrlC')">^C</button>
-  <button onclick="sendKey('CtrlD')">^D</button>
-  <button onclick="sendKey(' ')">␣</button>
-</div>
-
-<div class="connecting" id="connecting">
-  <div class="spinner"></div> Connecting...
+<div id="connecting">
+  <div class="spin"></div>
+  <p>Connecting to BEAST…</p>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.4/dist/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
 <script>
-// ═══════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════
+// ═══ STATE ═══
 let currentMode = localStorage.getItem('beast_mode') || 'pentest';
 let sessionId = localStorage.getItem('beast_session') || '';
+let currentView = 'term';
+let sessionStart = Date.now();
 
-// ═══════════════════════════════════════════════
-// MODE SWITCHING
-// ═══════════════════════════════════════════════
-const MODE_CONFIG = {
-  pentest: {
-    name: 'PENTEST',
-    class: 'pentest',
-    color: '#FF6B35',
-    systemPrompt: 'PENTEST MODE',
-    quickCmds: ['/recon ','/exploit ','/cve ','/chain ','/auto ','/bypass ','/sqlmap '],
-    welcome: '🔥 BEAST Pentest Mode — /recon /exploit /cve /auto\r\n\r\n',
-  },
-  coding: {
-    name: 'CODING',
-    class: 'coding',
-    color: '#448AFF',
-    systemPrompt: 'CODING MODE',
-    quickCmds: ['/! git ','/! python3 ','/! npm ','/! curl ','/! cat ','/! ls ','/! find '],
-    welcome: '💻 BEAST Coding Mode — /! command /help\r\n\r\n',
-  },
-  general: {
-    name: 'GENERAL',
-    class: 'general',
-    color: '#E040FB',
-    systemPrompt: 'GENERAL MODE',
-    quickCmds: ['/! ','/help','/status','/tokens','/cost','/gateways'],
-    welcome: '🧠 BEAST General Mode — /help for commands\r\n\r\n',
-  }
+const MODES = {
+  pentest: { emoji:'🔥', name:'Pentest', color:'#ff7b72' },
+  coding:  { emoji:'💻', name:'Coding', color:'#79c0ff' },
+  general: { emoji:'🧠', name:'General', color:'#d2a8ff' },
 };
 
-function switchMode(mode) {
-  currentMode = mode;
-  localStorage.setItem('beast_mode', mode);
-  
-  const config = MODE_CONFIG[mode];
-  
-  // Update badge
-  const badge = document.getElementById('mode-badge');
-  badge.textContent = config.name;
-  badge.className = 'mode-badge ' + config.class;
-  
-  // Update toolbar buttons
-  document.querySelectorAll('.mode-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.mode === mode);
-  });
-  
-  // Update terminal cursor color
-  term.options.cursor = config.color;
-  
-  // Update accent
-  document.documentElement.style.setProperty('--accent', config.color);
-  
-  // Update quick command buttons
-  updateQuickCmds(mode);
-  
-  // Send mode switch to server
-  socket.emit('mode', { session_id: sessionId, mode: mode });
-}
-
-function updateQuickCmds(mode) {
-  const toolbar = document.getElementById('toolbar');
-  // Remove existing quick cmds
-  toolbar.querySelectorAll('.quick-cmd').forEach(b => b.remove());
-  
-  // Add mode-specific quick cmds
-  const config = MODE_CONFIG[mode];
-  const sep = toolbar.querySelector('.sep:last-of-type');
-  config.quickCmds.forEach(cmd => {
-    const btn = document.createElement('button');
-    btn.className = 'quick-cmd';
-    btn.textContent = cmd.replace('/','').replace(' ','');
-    btn.onclick = () => sendCmd(cmd);
-    toolbar.insertBefore(btn, sep.nextSibling || sep);
-  });
-}
-
-// ═══════════════════════════════════════════════
-// TERMINAL SETUP
-// ═══════════════════════════════════════════════
-const isMobile = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent) || window.innerWidth < 768;
-const fontSize = isMobile ? (window.innerWidth < 480 ? 10 : 11) : (window.innerWidth > 1400 ? 14 : 13);
+// ═══ TERMINAL ═══
+const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent) || innerWidth < 768;
+const fs = innerWidth < 480 ? 10 : innerWidth < 768 ? 11 : 13;
 
 const term = new Terminal({
-  cursorBlink: true,
-  fontSize: fontSize,
-  fontFamily: "'Courier New', 'DejaVu Sans Mono', 'SF Mono', monospace",
+  cursorBlink: true, fontSize: fs,
+  fontFamily: "'SF Mono','JetBrains Mono','Fira Code',Consolas,monospace",
   theme: {
-    background: '#0a0a0f',
-    foreground: '#c0c0c0',
-    cursor: MODE_CONFIG[currentMode].color,
-    cursorAccent: '#0a0a0f',
-    selectionBackground: '#FF6B3533',
-    black: '#1a1a2e', red: '#FF1744', green: '#00C853', yellow: '#FFD600',
-    blue: '#448AFF', magenta: '#E040FB', cyan: '#00BCD4', white: '#e0e0e0',
-    brightBlack: '#757575', brightRed: '#FF5252', brightGreen: '#69F0AE',
-    brightYellow: '#FFFF00', brightBlue: '#82B1FF', brightMagenta: '#EA80FC',
-    brightCyan: '#84FFFF', brightWhite: '#ffffff',
+    background: '#0d1117', foreground: '#e6edf3',
+    cursor: '#f778ba', cursorAccent: '#0d1117',
+    selectionBackground: '#f778ba33',
+    black:'#161b22', red:'#ff7b72', green:'#3fb950', yellow:'#d29922',
+    blue:'#79c0ff', magenta:'#d2a8ff', cyan:'#79c0ff', white:'#e6edf3',
+    brightBlack:'#8b949e', brightRed:'#ffa198', brightGreen:'#56d364',
+    brightYellow:'#e3b341', brightBlue:'#a5d6ff', brightMagenta:'#e1b3ff',
+    brightCyan:'#a5d6ff', brightWhite:'#ffffff',
   },
-  allowProposedApi: true,
-  scrollback: 10000,
-  allowTransparency: true,
-  macOptionIsMeta: true,
+  allowProposedApi:true, scrollback:10000,
 });
 
 const fitAddon = new FitAddon.FitAddon();
-const webLinksAddon = new WebLinksAddon.WebLinksAddon();
-term.loadAddon(fitAddon);
-term.loadAddon(webLinksAddon);
+const webLinks = new WebLinksAddon.WebLinksAddon();
+term.loadAddon(fitAddon); term.loadAddon(webLinks);
 term.open(document.getElementById('terminal'));
 fitAddon.fit();
+window.addEventListener('resize', () => fitAddon.fit());
 
-window.addEventListener('resize', () => {
-  fitAddon.fit();
-  // Recalculate font size on resize
-  const w = window.innerWidth;
-  const newSize = w < 480 ? 10 : w < 768 ? 11 : w > 1400 ? 14 : 13;
-  if (newSize !== term.options.fontSize) {
-    term.options.fontSize = newSize;
-  }
-});
-
-// ═══════════════════════════════════════════════
-// WEBSOCKET
-// ═══════════════════════════════════════════════
+// ═══ SOCKET ═══
 const socket = io({
   query: { session_id: sessionId, mode: currentMode },
-  transports: ['websocket', 'polling'],
-  reconnection: true,
-  reconnectionDelay: 1000,
-  reconnectionAttempts: Infinity,
+  transports: ['websocket','polling'],
+  reconnection:true, reconnectionDelay:1000, reconnectionAttempts:Infinity,
 });
 
 socket.on('connect', () => {
   document.getElementById('connecting').style.display = 'none';
+  setConn(true);
 });
 
-socket.on('connected', (data) => {
-  sessionId = data.session_id;
+socket.on('connected', (d) => {
+  sessionId = d.session_id;
   localStorage.setItem('beast_session', sessionId);
-  document.getElementById('session-id').textContent = data.session_name;
-  term.clear();
-  const config = MODE_CONFIG[currentMode];
-  term.write(config.welcome + data.message + '\r\n');
+  document.getElementById('sb-session').textContent = d.session_name;
+  document.getElementById('tab-name').textContent = d.session_name;
+  updateSessions();
 });
 
-socket.on('output', (data) => {
-  if (data.data) {
+socket.on('output', (d) => {
+  if (d.data) {
     term.clear();
-    term.write(data.data.replace(/\n/g, '\r\n'));
+    term.write(d.data.replace(/\n/g,'\r\n'));
+    // Extract markdown from last AI response for md view
+    renderMd(d.data);
   }
 });
 
-socket.on('error', (data) => {
-  term.write('\r\n\x1b[31m[ERROR] ' + data.message + '\x1b[0m\r\n');
-});
-
-socket.on('killed', (data) => {
-  term.write('\r\n\x1b[33m' + data.message + '\x1b[0m\r\n');
+socket.on('error', (d) => {
+  term.write('\r\n\x1b[31m[ERROR] ' + d.message + '\x1b[0m\r\n');
 });
 
 socket.on('disconnect', () => {
+  setConn(false);
   document.getElementById('connecting').style.display = 'block';
-  document.getElementById('connecting').innerHTML = 
-    '<div class="spinner"></div> Reconnecting...';
 });
 
-// ═══════════════════════════════════════════════
-// INPUT
-// ═══════════════════════════════════════════════
-term.onData((data) => {
-  socket.emit('input', { session_id: sessionId, text: data });
-});
+// ═══ INPUT ═══
+term.onData((data) => socket.emit('input', { session_id: sessionId, text: data }));
+term.onPaste = (text) => socket.emit('input', { session_id: sessionId, text: text });
+document.getElementById('term-wrap').addEventListener('click', () => { if(currentView==='term') term.focus(); });
 
-term.onPaste = (text) => {
-  socket.emit('input', { session_id: sessionId, text: text });
-};
+// ═══ HELPERS ═══
+function setConn(on) {
+  const dot = document.getElementById('conn-dot');
+  dot.className = 'dot' + (on ? ' on' : '');
+  document.getElementById('conn-txt').textContent = on ? 'connected' : 'reconnecting…';
+}
+function setView(v) {
+  currentView = v;
+  document.getElementById('terminal').style.display = v==='term' ? 'block' : 'none';
+  document.getElementById('md-view').style.display = v==='md' ? 'block' : 'none';
+  document.getElementById('vt-term').classList.toggle('active', v==='term');
+  document.getElementById('vt-md').classList.toggle('active', v==='md');
+  if (v==='term') fitAddon.fit();
+}
+function toggleView() { setView(currentView==='term' ? 'md' : 'term'); }
 
-// ═══════════════════════════════════════════════
-// ACTIONS
-// ═══════════════════════════════════════════════
-function sendCmd(cmd) {
-  socket.emit('input', { session_id: sessionId, text: cmd });
-  term.focus();
+function renderMd(raw) {
+  // Extract markdown content between response headers (rough heuristic)
+  const md = document.getElementById('md-view');
+  const clean = raw
+    .replace(/\x1b\[[0-9;]*m/g, '')  // strip ANSI
+    .replace(/^.*[│╭╰├─]/gm, '')       // strip box-drawing lines (rough)
+    .trim();
+  md.innerHTML = marked.parse(clean) || '<p style="color:#8b949e">No markdown output yet. Run a command.</p>';
 }
 
-function sendKey(key) {
-  const keyMap = {
-    'Enter': '\r', 'Tab': '\t', 'Escape': '\x1b',
-    'ArrowUp': '\x1b[A', 'ArrowDown': '\x1b[B',
-    'ArrowLeft': '\x1b[D', 'ArrowRight': '\x1b[C',
-    'CtrlC': '\x03', 'CtrlD': '\x04', ' ': ' ',
-  };
-  const mapped = keyMap[key] || key;
-  socket.emit('input', { session_id: sessionId, text: mapped });
-  term.focus();
+function switchMode(mode) {
+  // Cycle: pentest -> coding -> general -> pentest
+  const order = ['pentest','coding','general'];
+  if (!mode || !MODES[mode]) {
+    const i = (order.indexOf(currentMode) + 1) % order.length;
+    mode = order[i];
+  }
+  currentMode = mode;
+  localStorage.setItem('beast_mode', mode);
+  const m = MODES[mode];
+  document.getElementById('mode-emoji').textContent = m.emoji;
+  document.getElementById('model-name').textContent = m.name;
+  document.getElementById('sb-mode').textContent = 'mode: ' + mode;
+  term.options.cursor = m.color;
+  socket.emit('mode', { session_id: sessionId, mode: mode });
 }
 
 function newSession() {
   localStorage.removeItem('beast_session');
   location.reload();
 }
-
 function killSession() {
-  if (confirm('Kill this session?')) {
+  if (confirm('Terminate this agent session?')) {
     socket.emit('kill_session', { session_id: sessionId });
     localStorage.removeItem('beast_session');
-    setTimeout(() => location.reload(), 1000);
+    setTimeout(() => location.reload(), 800);
   }
 }
-
 function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(()=>{});
-  } else {
-    document.exitFullscreen();
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+  else document.exitFullscreen();
+}
+function updateSessions() {
+  const el = document.getElementById('sessions');
+  if (sessionId) {
+    el.innerHTML = `<div class="session active"><span class="s-dot busy"></span><span class="s-name">${sessionId}</span></div>`;
   }
 }
 
-// ═══════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════
+// ═══ STATUS BAR TICKER ═══
+setInterval(() => {
+  const el = document.getElementById('sb-time');
+  const s = Math.floor((Date.now() - sessionStart) / 1000);
+  el.textContent = Math.floor(s/60) + 'm ' + (s%60) + 's';
+}, 1000);
+
+// ═══ INIT ═══
 switchMode(currentMode);
-
-// Focus terminal on tap (mobile)
-document.getElementById('terminal-wrapper').addEventListener('click', () => {
-  term.focus();
-});
-
-// Prevent zoom on double tap (mobile)
-document.addEventListener('dblclick', (e) => {
-  if (e.target.closest('#terminal-wrapper')) e.preventDefault();
-}, { passive: false });
 </script>
 </body>
 </html>
