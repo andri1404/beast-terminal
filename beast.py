@@ -383,6 +383,55 @@ def call_api_stream(gw_id, messages, system=None, max_tokens=None):
 # TOOL EXECUTION ENGINE
 # ═══════════════════════════════════════════════════════════════
 
+# Realtime findings tracker
+FINDINGS = []
+
+def detect_findings(output):
+    """Scan tool output for security findings (CVE, ports, vulns, creds, versions)."""
+    if not output:
+        return []
+    found = []
+    # CVE IDs
+    for cve in set(re.findall(r'CVE-\d{4}-\d{4,7}', output)):
+        found.append({"type": "cve", "severity": "info", "detail": cve, "title": f"CVE ditemukan: {cve}"})
+    # Severity keywords
+    for sev in ["CRITICAL", "HIGH"]:
+        if re.search(rf'\b{sev}\b', output):
+            found.append({"type": "severity", "severity": sev.lower(), "detail": sev, "title": f"Severity {sev} terdeteksi"})
+    # Open ports (nmap style: 80/tcp open, or "22/open")
+    for port in set(re.findall(r'(\d{1,5})/(?:tcp|udp)\s+open', output)):
+        found.append({"type": "port", "severity": "info", "detail": f"{port}/open", "title": f"Port terbuka: {port}"})
+    # SQL injection / XSS / RCE / auth bypass keywords
+    vuln_kw = {
+        "sql injection": "SQL Injection", "sqli": "SQLi", "cross-site scripting": "XSS",
+        "remote code execution": "RCE", "rce": "RCE", "auth bypass": "Auth Bypass",
+        "command injection": "Command Injection", "path traversal": "Path Traversal",
+        "credential": "Credential Found", "password": "Password/cred reference",
+        "unauthorized": "Unauthorized Access",
+    }
+    low = output.lower()
+    for kw, label in vuln_kw.items():
+        if kw in low:
+            found.append({"type": "vuln", "severity": "high", "detail": label, "title": f"Indikasi {label}"})
+    # Version disclosure (X.Y.Z)
+    versions = set(re.findall(r'(?:Apache|nginx|PHP|WordPress|LiteSpeed|Joomla|Laravel|Django|Node\.js|Tomcat)[ /]?([0-9]+\.[0-9]+(?:\.[0-9]+)?)', output, re.IGNORECASE))
+    for v in versions:
+        found.append({"type": "version", "severity": "info", "detail": v, "title": f"Version disclosure: {v}"})
+    return found
+
+def report_findings(output, source="tool"):
+    """Detect + log new findings in realtime. Returns count of NEW findings."""
+    new = detect_findings(output)
+    added = 0
+    for f in new:
+        # Dedup by detail
+        if not any(ex["detail"] == f["detail"] and ex["type"] == f["type"] for ex in FINDINGS):
+            FINDINGS.append(f)
+            added += 1
+            icon = {"cve": "🎯", "port": "🔌", "vuln": "💥", "severity": "⚠️", "version": "📌", "info": "🔍"}.get(f["type"], "🔍")
+            console.print(f"  [{C['accent']}]{icon}[/] [{C['model']}]{f['title']}[/]", highlight=False)
+    return added
+
 def execute_tool(tool_name, params):
     """Execute a tool and return the result."""
     try:
@@ -720,6 +769,11 @@ def agentic_loop(user_input):
             result = execute_tool(tool_name, params)
             show_tool_panel(tool_name, params, result, "done" if "error" not in result else "error")
             
+            # Realtime findings detection
+            raw_out = result.get("output") or result.get("content") or ""
+            if raw_out:
+                report_findings(raw_out)
+            
             # Feed result back to conversation
             tool_result = f"Tool result for {tool_name}:\n```json\n{json.dumps(result, indent=2)}\n```"
             SESSION.add_message("tool", tool_result)
@@ -878,6 +932,26 @@ def cmd_clear():
 def cmd_save(args):
     console.print(f"[{C['success']}]✓ {SESSION.save()}[/]")
 
+def cmd_findings(args):
+    """Show realtime findings collected during pentest."""
+    if not FINDINGS:
+        console.print(f"[{C['dim']}]Belum ada findings. Jalankan /recon atau /exploit dulu.[/]")
+        return
+    table = Table(title=f"Realtime Findings ({len(FINDINGS)})", box=box.ROUNDED, border_style=C["accent"])
+    table.add_column("#", style=C["dim"], justify="right")
+    table.add_column("Type", style=C["model"])
+    table.add_column("Severity", style=C["warning"])
+    table.add_column("Detail", style="bold", max_width=60)
+    for i, f in enumerate(FINDINGS, 1):
+        sev = f.get("severity", "info")
+        sev_color = C["error"] if sev in ("critical", "high") else C["warning"] if sev == "medium" else C["dim"]
+        icon = {"cve": "🎯", "port": "🔌", "vuln": "💥", "severity": "⚠️", "version": "📌"}.get(f.get("type"), "🔍")
+        table.add_row(str(i), f"{icon} {f.get('type','')}", f"[{sev_color}]{sev}[/]", f.get("detail",""))
+    console.print(table)
+    if args and args[0] in ("clear", "reset"):
+        FINDINGS.clear()
+        console.print(f"[{C['success']}]✓ Findings cleared.[/]")
+
 def cmd_report():
     """Auto-generate and save pentest report."""
     report = SESSION.to_markdown()
@@ -892,7 +966,7 @@ def cmd_report():
         "cost": SESSION.cost,
         "commands": SESSION.commands[-10:],
         "duration": str(datetime.now() - SESSION.start),
-        "findings": [],
+        "findings": FINDINGS,
     }
     json_path = REPORTS_DIR / f"summary_{SESSION.id}.json"
     json_path.write_text(json.dumps(summary, indent=2))
@@ -1471,6 +1545,7 @@ def dispatch(cmd, args):
     elif cmd == "cost": cmd_cost()
     elif cmd == "budget": cmd_budget(args)
     elif cmd == "history": cmd_history()
+    elif cmd == "findings": cmd_findings(args)
     elif cmd == "report": cmd_report()
     elif cmd == "parallel": cmd_parallel(args)
     elif cmd == "git": cmd_git(args)
@@ -1578,7 +1653,7 @@ def main():
     history_file = str(BEAST_DIR / "history")
     completions = list(PENTEST.keys()) + ["auto", "model", "gateways", "permission", "thinking", 
                     "compact", "clear", "save", "export", "status", "probe", "tokens", "cost", "budget", "history",
-                    "skill", "search", "jailbreak", "cve-api", "web", "git", "review", "edit", "parallel", "help", "exit"]
+                    "skill", "search", "jailbreak", "cve-api", "web", "git", "review", "edit", "parallel", "findings", "config", "help", "exit"]
     completer = WordCompleter(["/" + c for c in completions], ignore_case=True, sentence=True)
     
     style = Style.from_dict({"prompt": f"bold {C['accent']}", "sep": C['dim'], "gw": f"bold {C['model']}"})
