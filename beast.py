@@ -148,11 +148,19 @@ Search skills offline with `/search <query>` or `/skill <name>` (falls back to b
 You are a senior security engineer. Be direct, practical, and technically precise. Deliver what is asked without unnecessary preamble or roleplay. No "I'm a superintelligent hacker" persona — just get the job done.
 
 ## TOOLS
-Use these tool call blocks:
+You MUST execute commands using tool blocks — NEVER just list commands as text. When you need to run something, wrap it in a code fence so it gets executed:
 
 ```tool
 {"name": "bash", "command": "shell command"}
 ```
+
+Or a ```bash ...``` code block (also auto-executed). Examples of correct usage:
+
+```bash
+curl -s -I -k https://target.com
+```
+
+Always ACTUALLY RUN commands and read the output — do not just tell the user what to run. Other tools:
 
 ```tool
 {"name": "read", "path": "/absolute/path"}
@@ -418,15 +426,28 @@ def execute_tool(tool_name, params):
         return {"error": str(e)}
 
 def parse_tool_calls(content):
-    """Parse tool call blocks from AI response."""
-    pattern = r'```tool\s*\n(.*?)\n```'
-    matches = re.findall(pattern, content, re.DOTALL)
+    """Parse tool call blocks from AI response — supports multiple formats."""
     tools = []
-    for m in matches:
+    # Format 1: explicit tool JSON blocks ```tool {"name":...}```
+    for m in re.findall(r'```tool\s*\n(.*?)\n```', content, re.DOTALL):
         try:
             tools.append(json.loads(m.strip()))
         except:
             pass
+    # Format 2: bash/sh code fences (AI lists commands as code block)
+    for m in re.findall(r'```(?:bash|sh|shell)\s*\n(.*?)```', content, re.DOTALL):
+        cmd = m.strip()
+        if cmd and not cmd.startswith("\n#"):
+            tools.append({"name": "bash", "command": cmd})
+    # Format 3: JSON tool array (if AI returns a JSON array of tools)
+    try:
+        maybe = json.loads(content.strip())
+        if isinstance(maybe, list):
+            for item in maybe:
+                if isinstance(item, dict) and "name" in item:
+                    tools.append(item)
+    except:
+        pass
     return tools
 
 # ═══════════════════════════════════════════════════════════════
