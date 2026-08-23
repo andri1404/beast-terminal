@@ -1,0 +1,15 @@
+[Unit]
+Description=Ngrok Tunnel for BEAST Terminal
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart=/snap/bin/ngrok http 5000 --log=stdout
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
