@@ -8,38 +8,51 @@ Powered by **TokenRouter DeepSeek V4 Pro** · GLM-5.2 · BlockRun Nemotron 120B
 
 ## 📦 Install
 
-### 1. Clone repo
+### Linux / macOS
 
 ```bash
+# 1. Clone
 git clone https://github.com/andri1404/beast-terminal.git
 cd beast-terminal
-```
 
-### 2. Install dependencies
+# 2. Install deps
+pip install -r requirements.txt            # venv/macOS
+pip install --break-system-packages -r requirements.txt   # Ubuntu/Debian (PEP 668)
 
-```bash
-pip install --break-system-packages -r requirements.txt
-```
-
-> Pake `--break-system-packages` buat bypass PEP 668 (Ubuntu/Debian). Kalo di venv, ga perlu.
-
-### 3. Set API key
-
-```bash
+# 3. Set API key
 export HERMES_CUSTOM_API_TOKENROUTER_COM_API_KEY="sk-crcrQ..."
+echo 'export HERMES_CUSTOM_API_TOKENROUTER_COM_API_KEY="sk-..."' >> ~/.bashrc
+
+# 4. Verifikasi
+python3 beast.py --probe
+
+# 5. Run
+python3 beast.py
 ```
 
-> Tambahkan ke `~/.bashrc` biar permanen:
-> ```bash
-> echo 'export HERMES_CUSTOM_API_TOKENROUTER_COM_API_KEY="sk-..."' >> ~/.bashrc
-> source ~/.bashrc
-> ```
+### Windows (PowerShell)
 
-### 4. Verifikasi
+```powershell
+# 1. Clone
+git clone https://github.com/andri1404/beast-terminal.git
+cd beast-terminal
 
-```bash
-python3 beast.py --probe    # test semua gateway (harus ALIVE)
+# 2. Install deps (TANPA --break-system-packages)
+pip install -r requirements.txt
+
+# 3. Set API key
+$env:HERMES_CUSTOM_API_TOKENROUTER_COM_API_KEY="sk-crcrQ..."
+# Permanent:
+[Environment]::SetEnvironmentVariable("HERMES_CUSTOM_API_TOKENROUTER_COM_API_KEY", "sk-...", "User")
+
+# 4. Verifikasi
+python beast.py --probe
+
+# 5. Run
+python beast.py
 ```
+
+> Perbedaan: `python3` → `python`, `export` → `$env:`, `--break-system-packages` ga perlu di Windows.
 
 ---
 
@@ -68,7 +81,7 @@ Akses dari browser manapun. Buat public URL:
 ngrok http 5000                           # → https://xxx.ngrok-free.dev
 ```
 
-### Symlink ke PATH (opsional)
+### Symlink ke PATH (Linux/macOS)
 
 ```bash
 sudo ln -sf $(pwd)/beast /usr/local/bin/beast
@@ -91,7 +104,7 @@ STATUS:    /status /probe /help /exit
 
 ---
 
-## 🖥️ Deploy 24/7 di VPS
+## 🖥️ Deploy 24/7 di VPS (Linux)
 
 ```bash
 bash deploy/deploy.sh    # install deps + systemd service + cloudflared
