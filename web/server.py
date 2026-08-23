@@ -112,7 +112,9 @@ def read_tmux_output(session_id, last_pos=0):
 
 @socketio.on("connect")
 def handle_connect():
-    session_id = request.args.get("session_id", str(uuid.uuid4())[:12])
+    session_id = request.args.get("session_id", "").strip()
+    if not session_id:
+        session_id = str(uuid.uuid4())[:12]
     join_room(session_id)
     
     # Create or resume tmux session
