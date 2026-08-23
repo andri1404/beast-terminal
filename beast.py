@@ -65,7 +65,7 @@ DEFAULT_CONFIG = {
     "auto_save": True,
     "permission_mode": "auto",  # normal | auto | plan
     "show_thinking": False,
-    "max_tool_rounds": 10,
+    "max_tool_rounds": 15,
     "auto_compact_tokens": 50000,
 }
 
@@ -703,8 +703,24 @@ def agentic_loop(user_input):
             tool_result = f"Tool result for {tool_name}:\n```json\n{json.dumps(result, indent=2)}\n```"
             SESSION.add_message("tool", tool_result)
     
-    # Max rounds reached
-    console.print(f"[{C['warning']}]Max tool rounds ({max_rounds}) reached.[/]")
+    # Max rounds reached — force a final summary so the user gets results
+    console.print(f"\n[{C['warning']}]⏱ Max tool rounds ({max_rounds}) reached — summarizing findings…[/]\n")
+    SESSION.add_message("user", "You have reached the maximum number of tool rounds. Do NOT call any more tools. Summarize ALL findings, evidence, and results collected so far into a clear final report.")
+    sum_msgs = [{"role": m["role"], "content": m["content"]} for m in SESSION.messages[-20:]]
+    try:
+        # Use non-streaming for the final summary to avoid tool loops
+        sum_result = call_api(ACTIVE_GW, sum_msgs, system=get_effective_system_prompt())
+        if "error" not in sum_result and sum_result.get("content"):
+            SESSION.add_tokens(sum_result.get("prompt_tokens", 0), sum_result.get("completion_tokens", 0), model=sum_result.get("model", "unknown"))
+            console.print()
+            console.print(f"[{C['model']}]✻ {gw['name']}[/] · [{C['dim']}]final summary[/]")
+            console.print(Markdown(sum_result["content"], code_theme="monokai"))
+            console.print()
+            console.print("─" * min(console.width, 100), style=C["dim"])
+        else:
+            console.print(f"[{C['dim']}]Gagal bikin summary. Coba task lebih spesifik atau naikin limit: /config max_tool_rounds 20[/]")
+    except Exception:
+        console.print(f"[{C['dim']}]Gagal bikin summary. Coba task lebih spesifik.[/]")
 
 # ═══════════════════════════════════════════════════════════════
 # COMMANDS
@@ -784,6 +800,33 @@ def cmd_permission(args):
 def cmd_thinking():
     CONFIG["show_thinking"] = not CONFIG["show_thinking"]; save_config(CONFIG)
     console.print(f"[{C['success']}]Thinking: {'ON' if CONFIG['show_thinking'] else 'OFF'}[/]")
+
+def cmd_config(args):
+    """View or set config values (max_tool_rounds, temperature, etc.)."""
+    if not args:
+        for k, v in CONFIG.items():
+            console.print(f"  [{C['model']}]{k}[/]: [{C['success']}]{v}[/]")
+        return
+    key = args[0].lower()
+    if key not in CONFIG:
+        console.print(f"[{C['error']}]Unknown config: {key}. Valid: {', '.join(CONFIG.keys())}[/]")
+        return
+    if len(args) < 2:
+        console.print(f"[{C['model']}]{key}[/] = [{C['success']}]{CONFIG[key]}[/]")
+        return
+    val = args[1]
+    # Type coercion
+    old = CONFIG[key]
+    if isinstance(old, bool):
+        CONFIG[key] = val.lower() in ("true", "1", "on", "yes")
+    elif isinstance(old, int):
+        CONFIG[key] = int(val)
+    elif isinstance(old, float):
+        CONFIG[key] = float(val)
+    else:
+        CONFIG[key] = val
+    save_config(CONFIG)
+    console.print(f"[{C['success']}]✓ {key}: {old} → {CONFIG[key]}[/]")
 
 def cmd_compact():
     global SESSION
@@ -1401,6 +1444,7 @@ def dispatch(cmd, args):
     elif cmd == "model": cmd_model(args)
     elif cmd == "permission": cmd_permission(args)
     elif cmd == "thinking": cmd_thinking()
+    elif cmd == "config": cmd_config(args)
     elif cmd == "compact": cmd_compact()
     elif cmd == "tokens": cmd_tokens()
     elif cmd == "cost": cmd_cost()
