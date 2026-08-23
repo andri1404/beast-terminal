@@ -925,8 +925,14 @@ def cmd_skill(args):
     content = data.get("content", "")
     if isinstance(content, dict):
         content = json.dumps(content, indent=2)
+    content = str(content)
+    # Strip YAML frontmatter (between --- markers)
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            content = parts[2].strip()
     console.print(Panel(
-        f"[{C['model']}]{name}[/]\n\n{str(content)[:3000]}",
+        f"[{C['model']}]{name}[/]\n\n{content[:4000]}",
         title=f"[bold]Skill: {name}[/]",
         border_style=C["model"], box=box.ROUNDED,
     ))
@@ -943,6 +949,11 @@ def cmd_search(args):
         console.print(f"[{C['error']}]Error: {data['error']}[/]")
         return
     results = data.get("results", [])
+    if not results:
+        # Try OR search for multi-word queries
+        or_query = " OR ".join(query.split())
+        data2 = api_get(f"/search?q={urllib.parse.quote(or_query)}&limit=10")
+        results = data2.get("results", [])
     if not results:
         console.print(f"[{C['warning']}]No results for '{query}'[/]")
         return
@@ -961,7 +972,7 @@ def cmd_web(args):
         return
     query = " ".join(args)
     if not EXA_API_KEY:
-        console.print(f"[{C['error']}]No MCP_EXA_API_KEY set[/]")
+        console.print(f"[{C['error']}]No MCP_EXA_API_KEY set. Set valid key: export MCP_EXA_API_KEY=...[/]")
         return
     console.print(f"[{C['dim']}]Searching web: {query}...[/]")
     body = json.dumps({"query": query, "numResults": 5}).encode()
