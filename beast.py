@@ -586,7 +586,7 @@ def agentic_loop(user_input):
         if full_reasoning and CONFIG["show_thinking"]:
             console.print(Panel(
                 full_reasoning[-500:] if len(full_reasoning) > 500 else full_reasoning,
-                title=f"[{C['think']}]💭 Thinking[/]",
+                title=f"[{C['think']}]✻ Thinking[/]",
                 border_style=C["think"], box=box.ROUNDED, padding=(0, 1),
             ))
         
@@ -597,7 +597,7 @@ def agentic_loop(user_input):
             # No tool calls — final response
             console.print()
             header = Text()
-            header.append("● ", style=C["accent"])
+            header.append("✻ ", style=C["accent"])
             header.append(f"{gw['name']} ", style=f"bold {C['model']}")
             header.append(f"· {SESSION.tokens['total']:,} tokens ", style=C['token'])
             header.append(f"· ${SESSION.cost:.4f} ", style=C['success'])
@@ -1079,16 +1079,17 @@ def render_status_bar():
     elapsed = datetime.now() - SESSION.start
     mins, secs = int(elapsed.total_seconds() // 60), int(elapsed.total_seconds() % 60)
     perm = CONFIG["permission_mode"]
+    mode_sym = {"auto": "⏵⏵", "plan": "○", "normal": "⏸"}.get(perm, "⏸")
     left = Text()
-    left.append(f" {gw['name']} ", style=f"bold {C['model']}")
-    left.append(f"│ {perm} ", style=C['dim'])
+    left.append(f" {mode_sym} {perm} ", style=C['dim'])
+    left.append(f"· {ACTIVE_GW} ", style=C['model'])
     if SESSION.budget_limit:
         pct = SESSION.cost / SESSION.budget_limit * 100
-        left.append(f"│ ${SESSION.cost:.4f}/${SESSION.budget_limit:.2f} ", style=C['warning'] if pct > 50 else C['dim'])
+        left.append(f"· ${SESSION.cost:.4f}/{SESSION.budget_limit:.2f} ", style=C['warning'] if pct > 50 else C['dim'])
     right = Text()
-    right.append(f" {SESSION.tokens['total']:,}t ", style=C['token'])
-    right.append(f"│ ${SESSION.cost:.4f} ", style=C['success'])
-    right.append(f"│ {mins}m {secs}s ", style=C['dim'])
+    right.append(f"{SESSION.tokens['total']:,} tok ", style=C['token'])
+    right.append(f"· ${SESSION.cost:.4f} ", style=C['success'])
+    right.append(f"· {mins}m {secs}s ", style=C['dim'])
     layout = Layout(); layout.split_row(Layout(left, ratio=1), Layout(right, ratio=1))
     return Panel(layout, border_style=C["dim"], box=box.ROUNDED, padding=(0, 1))
 
@@ -1096,17 +1097,16 @@ def render_status_bar():
 # BANNER
 # ═══════════════════════════════════════════════════════════════
 
-BANNER = f"""
-[{C['accent']}]╔══════════════════════════════════════════════════════════════╗
-║  [{C['white']}]██████╗ ███████╗ █████╗ ███████╗████████╗  v4[{C['accent']}]               ║
-║  [{C['white']}]██╔══██╗██╔════╝██╔══██╗██╔════╝╚══██╔══╝[{C['accent']}]                   ║
-║  [{C['white']}]██████╔╝█████╗  ███████║███████╗   ██║[{C['accent']}]                      ║
-║  [{C['white']}]██╔══██╗██╔══╝  ██╔══██║╚════██║   ██║[{C['accent']}]                      ║
-║  [{C['white']}]██████╔╝███████╗██║  ██║███████║   ██║[{C['accent']}]                      ║
-║  [{C['white']}]╚═════╝ ╚══════╝╚═╝  ╚═╝╚══════╝   ╚═╝[{C['accent']}]                      ║
-║  [{C['success']}]🔥 AGENTIC LOOP · THINKING · TOOLS[{C['accent']}]                          ║
-║  [{C['tool']}]Commands: /recon /exploit /cve /auto /help[/]                              ║
-╚══════════════════════════════════════════════════════════════╝"""
+def print_banner():
+    """Claude Code-style startup banner."""
+    gw = GATEWAYS[ACTIVE_GW]
+    version = "5.3"
+    cwd = os.getcwd().replace(os.path.expanduser("~"), "~")
+    console.print()
+    console.print(f"[bold {C['accent']}]▐▛███▛█[/]   [bold white]BEAST Terminal v{version}[/]")
+    console.print(f"[bold {C['accent']}]▝▜██████▀[/]  [{C['model']}]{gw['name']}[/] · [{C['dim']}]API Usage[/]")
+    console.print(f"[{C['accent']}]  ▝▝ ▝▝[/]    [{C['dim']}]{cwd}[/]")
+    console.print()
 
 # ═══════════════════════════════════════════════════════════════
 # MAIN
@@ -1138,7 +1138,7 @@ def main():
         return
     
     # Interactive mode
-    console.print(BANNER)
+    print_banner()
     console.print(render_status_bar())
     console.print()
     
@@ -1157,7 +1157,7 @@ def main():
     while True:
         try:
             console.print(render_status_bar())
-            prompt_text = HTML(f'<prompt>❯</prompt><sep> beast@</sep><gw>{ACTIVE_GW}</gw><sep> &gt; </sep>')
+            prompt_text = HTML(f'<prompt>❯ </prompt>')
             user_input = session.prompt(prompt_text).strip()
         except (EOFError, KeyboardInterrupt):
             SESSION.save()
