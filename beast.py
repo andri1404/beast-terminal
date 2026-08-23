@@ -892,6 +892,129 @@ def cmd_history():
     console.print(table)
 
 # ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
+# EXTERNAL API INTEGRATIONS (Skills API + CVE + Exa)
+# ═══════════════════════════════════════════════════════════════
+
+SKILLS_API = "http://localhost:8765"
+SKILLS_API_KEY = os.environ.get("LOG_API_KEY", "hermes-logs-2026")
+EXA_API_KEY = os.environ.get("MCP_EXA_API_KEY", "")
+
+def api_get(path):
+    """GET request to Skills API."""
+    url = SKILLS_API + path
+    headers = {"X-API-Key": SKILLS_API_KEY}
+    try:
+        req = Request(url, headers=headers)
+        with urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        return {"error": str(e)}
+
+def cmd_skill(args):
+    """Fetch full skill content from Skills API."""
+    if not args:
+        console.print(f"[{C['error']}]Usage: /skill <name>[/]")
+        return
+    name = args[0]
+    console.print(f"[{C['dim']}]Fetching skill: {name}...[/]")
+    data = api_get(f"/skills/{name}")
+    if "error" in data:
+        console.print(f"[{C['error']}]Error: {data['error']}[/]")
+        return
+    content = data.get("content", "")
+    if isinstance(content, dict):
+        content = json.dumps(content, indent=2)
+    console.print(Panel(
+        f"[{C['model']}]{name}[/]\n\n{str(content)[:3000]}",
+        title=f"[bold]Skill: {name}[/]",
+        border_style=C["model"], box=box.ROUNDED,
+    ))
+
+def cmd_search(args):
+    """Search skills via FTS."""
+    if not args:
+        console.print(f"[{C['error']}]Usage: /search <query>[/]")
+        return
+    query = " ".join(args)
+    console.print(f"[{C['dim']}]Searching: {query}...[/]")
+    data = api_get(f"/search?q={urllib.parse.quote(query)}&limit=10")
+    if "error" in data:
+        console.print(f"[{C['error']}]Error: {data['error']}[/]")
+        return
+    results = data.get("results", [])
+    if not results:
+        console.print(f"[{C['warning']}]No results for '{query}'[/]")
+        return
+    table = Table(title=f"Skill Search: {query} ({data.get('total', 0)} found)", box=box.ROUNDED, border_style=C["dim"])
+    table.add_column("Name", style=C["model"])
+    table.add_column("Category", style=C["dim"])
+    table.add_column("Description", style="bold", max_width=60)
+    for r in results:
+        table.add_row(r.get("name", "?"), r.get("category", "?"), r.get("description", "")[:60])
+    console.print(table)
+
+def cmd_web(args):
+    """Exa web search."""
+    if not args:
+        console.print(f"[{C['error']}]Usage: /web <query>[/]")
+        return
+    query = " ".join(args)
+    if not EXA_API_KEY:
+        console.print(f"[{C['error']}]No MCP_EXA_API_KEY set[/]")
+        return
+    console.print(f"[{C['dim']}]Searching web: {query}...[/]")
+    body = json.dumps({"query": query, "numResults": 5}).encode()
+    req = Request(
+        "https://api.exa.ai/search",
+        data=body,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {EXA_API_KEY}"},
+        method="POST",
+    )
+    try:
+        with urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception as e:
+        console.print(f"[{C['error']}]Exa error: {e}[/]")
+        return
+    results = data.get("results", [])
+    if not results:
+        console.print(f"[{C['warning']}]No web results[/]")
+        return
+    table = Table(title=f"Web Search: {query}", box=box.ROUNDED, border_style=C["info"])
+    table.add_column("#", style=C["dim"])
+    table.add_column("Title", style="bold", max_width=40)
+    table.add_column("URL", style=C["info"], max_width=50)
+    for i, r in enumerate(results):
+        table.add_row(str(i+1), r.get("title", "?")[:40], r.get("url", "?")[:50])
+    console.print(table)
+
+def cmd_cve_api(args):
+    """Enhanced CVE search via Skills API."""
+    if not args:
+        console.print(f"[{C['error']}]Usage: /cve-api <query>[/]")
+        return
+    query = " ".join(args)
+    console.print(f"[{C['dim']}]Searching CVEs: {query}...[/]")
+    data = api_get(f"/cve/search?q={urllib.parse.quote(query)}&limit=10")
+    if "error" in data:
+        console.print(f"[{C['error']}]Error: {data['error']}[/]")
+        return
+    results = data.get("results", [])
+    if not results:
+        console.print(f"[{C['warning']}]No CVEs for '{query}'[/]")
+        return
+    table = Table(title=f"CVE Search: {query} ({data.get('total', 0)} found)", box=box.ROUNDED, border_style=C["dim"])
+    table.add_column("CVE", style=C["model"])
+    table.add_column("CVSS", style=C["warning"], justify="right")
+    table.add_column("Severity", style="bold")
+    table.add_column("Description", max_width=60)
+    for c in results:
+        sev = c.get("cvss_severity", "?")
+        sev_color = C["error"] if sev == "CRITICAL" else C["warning"] if sev == "HIGH" else C["dim"]
+        table.add_row(c.get("cve_id", "?"), str(c.get("cvss_score", "?")), f"[{sev_color}]{sev}[/]", c.get("description", "")[:60])
+    console.print(table)
+
 # PENTEST PROMPTS
 # ═══════════════════════════════════════════════════════════════
 
@@ -917,6 +1040,10 @@ def dispatch(cmd, args):
     elif cmd == "budget": cmd_budget(args)
     elif cmd == "history": cmd_history()
     elif cmd == "report": cmd_report()
+    elif cmd == "skill": cmd_skill(args)
+    elif cmd == "search": cmd_search(args)
+    elif cmd == "web": cmd_web(args)
+    elif cmd == "cve-api": cmd_cve_api(args)
     elif cmd == "probe": cmd_probe()
     elif cmd == "status": cmd_status()
     elif cmd == "clear": cmd_clear()
@@ -1046,5 +1173,5 @@ def main():
             agentic_loop(user_input)
 
 if __name__ == "__main__":
-    import urllib.request, urllib.error
+    import urllib.request, urllib.error, urllib.parse
     main()
